@@ -1,0 +1,25 @@
+Citizens 2.0.39-SNAPSHOT Build 3887, fullwall and contributors.
+Unmodified binary, Open Software License 3.0; full text: CITIZENS-OSL-3.0.txt.
+Project and source repositories:
+https://www.citizensnpcs.co/
+https://github.com/CitizensDev/Citizens2
+https://github.com/CitizensDev/CitizensAPI
+Official distribution: https://ci.citizensnpcs.co/job/Citizens2/3887/
+
+LuckPerms 5.5.85, Luck and contributors, unmodified Bukkit distribution.
+MIT license; full text: LUCKPERMS-MIT.txt.
+Source: https://github.com/LuckPerms/LuckPerms
+Binary: https://download.luckperms.net/1672/bukkit/loader/LuckPerms-Bukkit-5.5.85.jar
+
+Deepforge embedded library notices follow. Citizens is separately included
+in this installation archive, not embedded into Deepforge.jar.
+
+# Third-party notices
+
+The plugin JAR embeds these libraries:
+
+- **SQLite JDBC 3.49.1.0**, Xerial, https://github.com/xerial/sqlite-jdbc . Its Apache-2.0 and original Zentus license texts are retained inside the JAR under `META-INF/maven/org.xerial/sqlite-jdbc/LICENSE` and `LICENSE.zentus`.
+- **Gson 2.11.0**, Google, https://github.com/google/gson . Copyright 2008 Google Inc. Licensed under the Apache License, Version 2.0. The full Apache-2.0 text is included in `licenses/APACHE-2.0.txt` in the distribution.
+- **Error Prone annotations 2.27.0**, Google, https://github.com/google/error-prone . Apache-2.0.
+
+Paper, SLF4J and Citizens are provided by the Minecraft server installation, not bundled in the plugin. JUnit and build/formatting tools are development-only. Minecraft game assets are not redistributed; resource-pack references to `minecraft:` resolve against the user's client installation.

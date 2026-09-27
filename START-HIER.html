@@ -1,0 +1,196 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deepforge · Frisch installieren</title><style>
+*{box-sizing:border-box}body{margin:0;background:#101a19;color:#e7eee9;font:16px/1.65 system-ui,sans-serif}
+main{max-width:1000px;margin:auto;padding:54px 28px}h1{font-size:44px;line-height:1.12;margin:12px 0 20px}
+h2{color:#ffd08a;font-size:24px;margin-top:38px}a{color:#8de0cb}code{color:#ffd08a;background:#101a19;padding:2px 6px;border-radius:4px}
+.tag{color:#ffbf66;letter-spacing:.14em;font-size:13px;font-weight:bold}.lead{font-size:19px;color:#b7c9c1}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:28px 0}
+.card{background:#1a2b27;border:1px solid #34473e;border-radius:14px;padding:22px}.card b{color:#ffd08a}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:13px;border-bottom:1px solid #34473e}th{color:#9ab4a7}
+li{margin:12px 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#16231f;padding:22px;border-radius:12px;font:14px/1.6 monospace}
+summary{cursor:pointer;color:#8de0cb}footer{color:#97aaa0;margin-top:40px;font-size:14px}
+</style><main><div class="tag">PAPER 1.21.8 · JAVA 21 · FRISCHE INSTALLATION</div>
+<h1>Deepforge.<br>Alles bereit für den Neustart.</h1>
+<p class="lead">Alle bisher gebauten Systeme – mit automatischem Einstieg, Varo-TAB und Rängen.
+Dieses Paket enthält keine Spielstände, keine Testwelt und keine vorbelegten Spielerrechte.</p>
+<div class="grid"><div class="card"><b>01 · Server vorbereiten</b><p>Paper 1.21.8 mit Java 21 verwenden. Server stoppen.
+Bei einer bisherigen Deepforge-Installation zuerst den Reset-Abschnitt unten lesen.</p></div>
+<div class="card"><b>02 · Dateien einsetzen</b><p>Den Ordner <code>plugins</code> aus diesem Paket in den Server-Hauptordner kopieren.
+Je Plugin darf nur eine JAR vorhanden sein.</p></div>
+<div class="card"><b>03 · Pack aktivieren & starten</b><p>Ressourcenpaket im Client aktivieren oder per HTTPS bereitstellen.
+Server starten und verbinden: Der Einstieg erfolgt automatisch.</p></div></div>
+<h2>Was kommt wohin?</h2><table><tr><th>Datei im Paket</th><th>Ziel / Zweck</th></tr>
+<tr><td><code>plugins/Deepforge.jar</code></td><td>SERVER/plugins/ – das gesamte Spiel</td></tr>
+<tr><td><code>plugins/Citizens.jar</code></td><td>SERVER/plugins/ – sichtbare Arbeiter</td></tr>
+<tr><td><code>plugins/LuckPerms.jar</code></td><td>SERVER/plugins/ – Rangverwaltung; vorhandenes LP beibehalten</td></tr>
+<tr><td><code>plugins/Deepforge/config.yml</code></td><td>SERVER/plugins/Deepforge/ – frische Einstellungen</td></tr>
+<tr><td><code>resourcepack/Deepforge-ResourcePack.zip</code></td><td>Minecraft-Ressourcenpaketordner oder HTTPS-Webspace</td></tr>
+<tr><td><code>docs / source / licenses</code></td><td>Begleitmaterial; kein Plugin-Ordner</td></tr></table>
+<h2>Automatisch spielen</h2><p>Niemand muss <code>/df start</code> eingeben. Neue Spieler bekommen ihr Gelände und ihre
+Startausrüstung automatisch. TAB und Infotafel sind aktiv. Handbuch öffnen: Rechtsklick oder <code>/df menu</code>.
+Bei vollem Inventar vier Plätze freimachen; der Einstieg wird automatisch erneut versucht.</p>
+<h2>Eigene Modelle und Texturen</h2><p>Zum direkten Testen das enthaltene Pack im Client aktivieren, dann
+<code>/df pack local</code> eingeben. Für alle Spieler automatisch: die Pack-ZIP unter einer direkten öffentlichen
+HTTPS-Adresse hosten und diese unter <code>resource-pack.url</code> eintragen. Die passende SHA-1 ist bereits
+eingetragen. Das bloße Kopieren der ZIP auf den Minecraft-Server stellt keinen Download bereit.</p>
+<h2>Bestehenden Fortschritt wirklich zurücksetzen</h2><p>Ein frisches Archiv löscht keine alten Dateien auf deinem Server.
+Vor dem Stoppen alle Spieler mit <code>/df leave</code> austreten lassen. Danach den Server stoppen und
+<code>plugins/Deepforge/</code> sowie die Spielwelt <code>deepforge/</code> in eine Sicherung außerhalb des Servers
+verschieben. Anschließend dieses Paket einsetzen. Die neue Datenbank und Spielwelt entstehen automatisch.</p>
+<h2>Ränge einrichten</h2><p>LuckPerms ist ohne Benutzerdaten enthalten. Bestehende Rechte
+<code>network.rank.*</code> und <code>varo.*</code> werden erkannt. Ohne Rang ist der Name grau.
+Die genaue Rangtabelle und Beispiele stehen in <a href="docs/TAB-UND-AUTOLOGIN.md">TAB-UND-AUTOLOGIN.md</a>
+und in der vollständigen Anleitung unten.</p>
+<details><summary>Vollständige Anleitung öffnen – Installation, Reset, Ressourcenpaket, LuckPerms</summary><pre>DEEPFORGE – FRISCHES SERVERPAKET FÜR PAPER 1.21.8
+====================================================
+
+Das ist ein Server-Plugin, keine Fabric-/Forge-Mod.
+Benötigt: Minecraft Java 1.21.8, Paper 1.21.8 und Java 21.
+Getestete Umgebung: Paper Build 60, Citizens 2.0.39 Build 3887.
+Paper/Minecraft selbst sind nicht in diesem ZIP enthalten.
+
+1. Server vollständig stoppen.
+2. Falls dort schon Deepforge installiert war: Abschnitt RESET unten ausführen.
+3. Dieses ZIP DIREKT in den Hauptordner des Servers entpacken.
+   Dort liegt auch dessen server.properties. Die JARs gehören nach plugins/,
+   nicht nach mods/. Es darf jeweils nur eine JAR je Plugin geben.
+   Vorhandene ältere JAR-Versionen gegebenenfalls aus plugins/ herausnehmen.
+4. Ressourcenpaket einrichten: Variante A oder B unten.
+5. Server normal starten. Kein /reload verwenden.
+6. Mit Minecraft Java 1.21.8 verbinden. Deepforge startet automatisch!
+   Niemand muss /df start eingeben. TAB-Liste und Infotafel sind bereits aktiv.
+   Vier freie Inventarplätze für Grundwerkzeuge bereithalten.
+   Das Dorf mit Wald und Minen wird beim ersten Eintritt aufgebaut.
+   Handbuch: Rechtsklick oder /df menu. Tutorial: /df tutorial.
+
+ENTHALTEN
+---------
+plugins/Deepforge.jar                 Aktueller vollständiger Pluginstand
+plugins/Citizens.jar                  Passende vollständige NPC-Distribution
+plugins/LuckPerms.jar                 Berechtigungsverwaltung für TAB-Ränge
+plugins/Deepforge/config.yml          Frische Konfiguration ohne lokale Test-URL
+resourcepack/Deepforge-ResourcePack.zip  Eigene Texturen und Modelle
+resourcepack/pack.sha1                Prüfsumme des Ressourcenpakets
+docs/                                Anleitung, Änderungen und Prüfbericht
+licenses/                            Lizenzhinweise
+source/                              Deepforge-Quellcode
+SHA256SUMS.txt                        Prüfsummen aller enthaltenen Dateien
+START-HIER.html                       Übersichtliche Anleitung im Browser
+
+WAS KOMMT WOHIN?
+----------------
+- Den gesamten plugins/-Ordner dieses ZIPs in den Server-Hauptordner kopieren.
+  Ergebnis: SERVER/plugins/Deepforge.jar, Citizens.jar, LuckPerms.jar und
+  SERVER/plugins/Deepforge/config.yml. Nicht SERVER/plugins/plugins/ erzeugen.
+- Die ZIP aus resourcepack/ gehört entweder in den Ressourcenpaketordner jedes
+  Minecraft-Clients oder auf deinen HTTPS-Webspace (siehe unten).
+- docs/, source/, licenses/ und die Anleitungsdateien sind Begleitmaterial;
+  sie müssen nicht in den plugins/-Ordner.
+- Paper 1.21.8 und Java 21 stellt dein Hoster bereit bzw. installierst du separat.
+
+ALLE BISHERIGEN FUNKTIONEN
+------------------------
+Minen und Dorf, überarbeiteter Wald mit Sägewerk, Arbeiter und Offline-Produktion,
+Erz-/Holzglück, Gegenstände und Upgrades, Bosskämpfe und Lebensanzeigen,
+Party-Dungeons mit Leveln, Heilung, Tutorials, neue Menüführung sowie die
+Varo-TAB/Infotafel mit Rangfarben und automatischem Einstieg sind enthalten.
+
+FRISCHER SPIELSTART / RESET
+--------------------------
+Das ZIP enthält KEINE Spielerprofile, Datenbanken, gebauten Welten,
+Arbeiter-Spielstände, Administratorlisten oder Zugangsdaten.
+Auf einem frischen Zielserver startet jeder mit den normalen Anfangswerten.
+Level, Geldfortschritt, Ausrüstung, Arbeiter, Boss-/Dungeonfortschritt,
+Tutorialfortschritt und Inventare aus unserem Testserver werden nicht übertragen.
+Das Anfangsgeld ist 250 $, wie im Spiel vorgesehen.
+
+WICHTIG: Entpacken allein entfernt KEINE bereits vorhandenen Spielstände.
+Für einen vollständigen Deepforge-Neustart auf einem bisher genutzten Server:
+- Bei noch laufendem Spiel zuerst /df leave ausführen und im normalen Spawn
+  ausloggen; bei mehreren Spielern alle Teilnehmer vorher austreten lassen.
+- Server stoppen und die Daten sichern.
+- Den bisherigen Ordner plugins/Deepforge AUS plugins/ heraus in die Sicherung
+  verschieben. Dabei auch profiles.db-wal und profiles.db-shm mitnehmen, falls da.
+- Die bisherige Spielwelt deepforge/ aus dem Server-Hauptordner in die Sicherung
+  verschieben. Bei abweichendem world-name den tatsächlich konfigurierten
+  Deepforge-Weltordner verwenden.
+- Erst danach dieses ZIP entpacken und den Server starten.
+Die neue Datenbank und Spielwelt werden automatisch erzeugt. Den Citizens-
+Datenordner nicht pauschal entfernen: fremde NPCs können dort gespeichert sein.
+Deepforge-Arbeiter werden aus den neuen Spielerprofilen erstellt.
+Andere Spielwelten und andere Plugins werden durch diesen Reset nicht gelöscht.
+
+RESSOURCENPAKET – VARIANTE A: DIREKT TESTEN
+----------------------------------------
+Jeder Spieler kopiert resourcepack/Deepforge-ResourcePack.zip unverändert in
+den Ressourcenpaketordner seines Minecraft-Clients und aktiviert es ganz oben.
+Im Spiel anschließend /df pack local ausführen. Dieser Befehl bestätigt nur,
+dass das Paket manuell aktiviert wurde; er lädt keine Datei herunter.
+Die beigelegte Konfiguration ist für diesen Weg sofort verwendbar.
+
+RESSOURCENPAKET – VARIANTE B: AUTOMATISCH FÜR ALLE
+----------------------------------------------
+1. resourcepack/Deepforge-ResourcePack.zip auf deinem Webspace/Hoster unter
+   einer öffentlich erreichbaren direkten HTTPS-Download-Adresse bereitstellen.
+   Eine Download-Webseite, private Freigabe oder localhost-Adresse funktioniert
+   für andere Spieler nicht. Das Ablegen im Serverordner allein hostet keine Datei.
+2. Bei gestopptem Server in plugins/Deepforge/config.yml eintragen:
+
+   resource-pack:
+     url: &#x27;https://DEINE-DOMAIN/Deepforge-ResourcePack.zip&#x27;
+     sha1: &#x27;806a2ec154427d381b4195db244804dfc21372a4&#x27;
+     required: true
+     textured-menus: true
+
+   Die Beispiel-Domain durch deine echte direkte Download-Adresse ersetzen.
+   Die richtige SHA-1 steht schon in der mitgelieferten config.yml.
+3. Server starten; Minecraft bietet das Paket beim Eintritt an.
+   Erneut anbieten: /df pack. Spieler müssen es annehmen.
+   Bei mehreren vorhandenen Ressourcenpaketen ist ein gemeinsames Pack nötig.
+
+SERVER-EINSTELLUNGEN
+-------------------
+IP, Port, Whitelist, Online-Modus und Adminrechte konfigurierst du über deinen
+Hoster bzw. deinen bestehenden Server. Dieses ZIP überschreibt diese nicht.
+Es enthält keine server.properties und keine lokal gebundenen Startskripte.
+Beim ersten Start benötigt Citizens Internetzugriff für seine Bibliotheken;
+Spielerskins können ebenfalls Onlinezugriff benötigen.
+Die Spielfiguren benötigen weder einen Client-Mod noch ModelEngine.
+
+LUCKPERMS / RÄNGE
+----------------
+LuckPerms 5.5.85 (Bukkit-Version) ist frisch und OHNE Benutzerdaten beigelegt.
+Downloadquelle: https://luckperms.net/download
+Für eine Neuinstallation die mitgelieferte LuckPerms.jar verwenden.
+Bei einem bereits vorhandenen LuckPerms-Setup dessen JAR und Konfiguration
+beibehalten und die beigelegte Kopie nicht zusätzlich installieren.
+
+Ohne zugewiesenen Rang erscheinen Spieler grau. Neue LP-Gruppen können in der
+Serverkonsole so eingerichtet werden (ohne vorangestellten Schrägstrich):
+  lp creategroup admin
+  lp group admin permission set network.rank.admin true
+  lp creategroup vip
+  lp group vip permission set network.rank.vip true
+  lp user DEIN_SPIELERNAME parent add admin
+Den Platzhalter ersetzen und Ränge bewusst vergeben. Die gezeigten Rangrechte
+steuern die Darstellung, nicht automatisch sämtliche Server-Adminrechte.
+Es sind keine Spieler vorab als Administrator eingetragen.
+Alle Rangnamen und Farben: docs/TAB-UND-AUTOLOGIN.md.
+
+Präfixe/Sortierung entsprechen dem Varo-Code. Vorhandene network.rank.*- oder
+varo.*-Rechte werden erkannt. HOSTER wird ausdrücklich in display.hosters der
+Deepforge-Konfiguration über Name oder UUID eingetragen, nicht durch Wildcards.
+
+PRÜFUNG
+-------
+Aktuelles Deepforge-JAR auf dem lokalen Paper-Server gestartet und geprüft.
+144 automatisierte Tests bestanden; native Wald-, Menü- und Boardprüfung erfolgreich.
+Archivintegrität, Prüfsummen und Ausschluss sämtlicher Spielstände geprüft.
+LuckPerms aus offizieller Quelle geladen; JAR-Version und Archivintegrität geprüft.
+Die zusätzlich beigelegte LuckPerms-JAR wurde nicht neu auf dem Testserver gestartet.
+Kein Test auf deinem externen Hoster und keine neue Minecraft-Client-Abnahme.
+</pre></details>
+<p><a href="INSTALLATION.txt">Textfassung öffnen</a> · <a href="docs/TESTREPORT.md">Prüfbericht</a> ·
+<a href="https://luckperms.net/download">Offizielle LuckPerms-Quelle</a></p>
+<footer>Enthält Deepforge, Citizens, LuckPerms und Ressourcenpaket. Paper/Java stellt dein Hoster bereit.
+Keine Spielstände übernommen. Minecraft-Client-Abnahme und externer Hoster-Test stehen aus.</footer></main></html>

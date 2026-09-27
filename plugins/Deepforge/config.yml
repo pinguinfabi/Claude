@@ -1,0 +1,33 @@
+# Dedicated game world. Existing worlds with the same name are rejected unless
+# they carry Deepforge's ownership marker. Back up world + plugin data together.
+world-name: deepforge
+resource-pack:
+  # Direct public HTTPS URL of Deepforge-ResourcePack.zip (no download landing page).
+  url: ''
+  sha1: '806a2ec154427d381b4195db244804dfc21372a4'
+  required: false
+  # Enable only after the pack has been applied; /df pack re-sends it.
+  textured-menus: true
+workers:
+  # Citizens 2.0.39 with Minecraft 1.21.8 support is needed for player NPCs.
+  # Without it, the game works, but hiring is disabled.
+  skins: [Steve, Alex, Zuri, Efe, Kai, Noor, Sunny]
+  # Optional signed textures replace the name lookup: value + signature per index.
+  signed-textures: []
+mining:
+  respawn-seconds: 25
+  # Optional accessibility setting; lantern lighting is the default.
+  night-vision: false
+game:
+  # Also defaults to true when an existing config has no auto-join key.
+  auto-join: true
+  starter-money: 250
+  # Templates are generated incrementally to limit per-tick block work.
+  build-blocks-per-tick: 1400
+display:
+  tab-list: true
+  sidebar: true
+  network-name: 'Pinguin Netzwerk'
+  social: 'twitch.tv/fabiderpinguin'
+  # Explicit names/UUIDs; wildcard permissions never turn every admin into HOSTER.
+  hosters: []
