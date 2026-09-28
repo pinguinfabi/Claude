@@ -4,7 +4,7 @@ world-name: deepforge
 resource-pack:
   # Direct public HTTPS URL of Deepforge-ResourcePack.zip (no download landing page).
   url: ''
-  sha1: '21f8b274e6651033418083398d70145f16dbfd1c'
+  sha1: '8fd787e6baa2f120bdc4569a1d34e59e1b888c47'
   required: false
   # Enable only after the pack has been applied; /df pack re-sends it.
   textured-menus: true
@@ -18,6 +18,11 @@ mining:
   respawn-seconds: 25
   # Optional accessibility setting; lantern lighting is the default.
   night-vision: false
+events:
+  # Every N seconds a random ore vein in an occupied mine level turns into a
+  # rich vein (4x ore + forge dust for whoever mines it first).
+  rich-vein-seconds: 240
+  rich-vein-duration: 120
 game:
   # Also defaults to true when an existing config has no auto-join key.
   auto-join: true
@@ -29,6 +34,8 @@ game:
   shared-world: true
   # Plot used as the shared camp (0 = the first plot ever created).
   shared-plot: 0
+  # Daily tasks reset at midnight in this time zone.
+  timezone: 'Europe/Berlin'
 display:
   tab-list: true
   sidebar: true
