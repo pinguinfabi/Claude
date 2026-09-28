@@ -24,6 +24,11 @@ game:
   starter-money: 250
   # Templates are generated incrementally to limit per-tick block work.
   build-blocks-per-tick: 1400
+  # One camp and one mine for all players. Bosses and monsters stay personal:
+  # everyone fights their own and only sees their own. false = one plot per player.
+  shared-world: true
+  # Plot used as the shared camp (0 = the first plot ever created).
+  shared-plot: 0
 display:
   tab-list: true
   sidebar: true
