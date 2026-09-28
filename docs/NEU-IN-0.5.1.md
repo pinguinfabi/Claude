@@ -1,7 +1,7 @@
 # Neu in Deepforge 0.5.1
 
 Beim Serverstart steht im Log `Deepforge 0.5.1 ready`.
-**Neues Ressourcenpaket** (SHA-1 `3b9ae4c4a679738b101dd0f0e8e18988c8252eaf`). Mit Self-Host oder leerem `sha1:`
+**Neues Ressourcenpaket** (SHA-1 `3b9ae4c4a679738b101dd0f0e8e18988c8252eaf`, inzwischen durch 0.5.2 ersetzt). Mit Self-Host oder leerem `sha1:`
 kommt es automatisch. Wer es selbst hostet: `resourcepack/Deepforge-ResourcePack.zip` neu hochladen und die
 neue SHA-1 in `plugins/Deepforge/config.yml` eintragen (steht dort schon).
 
