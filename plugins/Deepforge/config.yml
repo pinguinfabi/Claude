@@ -8,6 +8,15 @@ resource-pack:
   required: false
   # Enable only after the pack has been applied; /df pack re-sends it.
   textured-menus: true
+  # Empty sha1 = the pack bundled in the plugin jar (also written to
+  # plugins/Deepforge/Deepforge-ResourcePack.zip on every start).
+  # Built-in pack download: players get the matching pack automatically on join.
+  # Needs this TCP port reachable from the players (open/forward it at your host).
+  self-host:
+    enabled: false
+    port: 8765
+    # Address players use to reach the server; empty = the address they connected with.
+    public-address: ''
 workers:
   # Citizens 2.0.39 with Minecraft 1.21.8 support is needed for player NPCs.
   # Without it, the game works, but hiring is disabled.
