@@ -95,7 +95,7 @@ RESSOURCENPAKET – VARIANTE B: AUTOMATISCH FÜR ALLE
 
    resource-pack:
      url: 'https://DEINE-DOMAIN/Deepforge-ResourcePack.zip'
-     sha1: '6d3ee6713492c58d17fa757b363deba893dc5878'
+     sha1: '3b9ae4c4a679738b101dd0f0e8e18988c8252eaf'
      required: true
      textured-menus: true
 
