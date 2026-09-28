@@ -48,6 +48,8 @@ game:
 display:
   tab-list: true
   sidebar: true
+  # Chat im Netzwerk-Style: Rang-Tag, Name in Rangfarbe, » Nachricht.
+  chat: true
   network-name: 'Pinguin Netzwerk'
   social: 'twitch.tv/fabiderpinguin'
   # Explicit names/UUIDs; wildcard permissions never turn every admin into HOSTER.
