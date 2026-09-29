@@ -4,7 +4,7 @@ world-name: deepforge
 resource-pack:
   # Direct public HTTPS URL of Deepforge-ResourcePack.zip (no download landing page).
   url: ''
-  sha1: '6b9af692dfee97ee91fc7b2c25062afc03ab3566'
+  sha1: 'c016f3099f6d0dd4972ec4618e60c6c3cb495eea'
   required: false
   # Enable only after the pack has been applied; /df pack re-sends it.
   textured-menus: true
@@ -56,7 +56,7 @@ display:
   sidebar: true
   # Chat im Netzwerk-Style: Rang-Tag, Name in Rangfarbe, » Nachricht.
   chat: true
-  network-name: 'Pinguin Netzwerk'
+  network-name: 'Axxin.de'
   social: 'twitch.tv/fabiderpinguin'
   # Explicit names/UUIDs; wildcard permissions never turn every admin into HOSTER.
   hosters: []

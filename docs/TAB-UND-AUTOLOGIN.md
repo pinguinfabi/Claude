@@ -1,6 +1,6 @@
 # TAB, Ränge und automatischer Einstieg
 
-TAB-Liste und Infotafel verwenden das Design aus deinem Varo-Projekt: **Pinguin Netzwerk ● Deepforge**, goldener Verlauf, weißer Spielname, graue Beschriftungen mit `▸`, dezente Trenner und der violette Community-Link. Der Varo-Quellordner wurde als Vorlage gelesen und nicht verändert.
+TAB-Liste und Infotafel verwenden das Design aus deinem Varo-Projekt: **Axxin.de ● Deepforge**, silberner Verlauf, weißer Spielname, graue Beschriftungen mit `▸`, dezente Trenner und der violette Community-Link. Der Varo-Quellordner wurde als Vorlage gelesen und nicht verändert.
 
 Die TAB-Liste enthält echte Online-Spieler mit Rangpräfix, Rangfarbe und Rangsortierung. Kopf/Fuß zeigen Netzwerk, Spielmodus, sichtbare Spielerzahl, Verbindung, eigenes Geld und Dungeonlevel. Keine künstlichen Spieler oder festen Namensplatzhalter. Die rechte Infotafel zeigt persönlichen Geld-, Gebiets-, Dungeon-, Gegner-, Rucksack-, Holzlager-, Arbeiter- und Heilungsfortschritt. Aktualisierung einmal pro Sekunde; unveränderte Texte werden nicht neu gesendet.
 
@@ -47,7 +47,7 @@ game:
 display:
   tab-list: true
   sidebar: true
-  network-name: 'Pinguin Netzwerk'
+  network-name: 'Axxin.de'
   social: 'twitch.tv/fabiderpinguin'
   hosters: []
 ```
