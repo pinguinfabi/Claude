@@ -4,7 +4,7 @@ world-name: deepforge
 resource-pack:
   # Direct public HTTPS URL of Deepforge-ResourcePack.zip (no download landing page).
   url: ''
-  sha1: 'fde5a3848990bb52d209867cc13bc04030ba567f'
+  sha1: '18352e9493db58ac5141605eef92f6d7a889a169'
   required: false
   # Enable only after the pack has been applied; /df pack re-sends it.
   textured-menus: true
