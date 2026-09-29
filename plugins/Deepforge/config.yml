@@ -4,7 +4,7 @@ world-name: deepforge
 resource-pack:
   # Direct public HTTPS URL of Deepforge-ResourcePack.zip (no download landing page).
   url: ''
-  sha1: '3c5e6214f9f1668ec2d1063c36753b799524fe2a'
+  sha1: '27421da96dfae38216b9d6032fd8afd0262cd0ef'
   required: false
   # Enable only after the pack has been applied; /df pack re-sends it.
   textured-menus: true
@@ -32,6 +32,12 @@ events:
   # rich vein (4x ore + forge dust for whoever mines it first).
   rich-vein-seconds: 240
   rich-vein-duration: 120
+  # Weltereignisse (Goldrausch, Erzrausch, Monsterflut, Tiefenfieber) for everyone at once.
+  world-events: true
+  world-interval-minutes: 45
+  world-duration-minutes: 10
+  # Fewer players online than this: events wait.
+  world-min-players: 1
 game:
   # Also defaults to true when an existing config has no auto-join key.
   auto-join: true
