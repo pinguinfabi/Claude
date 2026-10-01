@@ -33,6 +33,18 @@ Ohne Recht kommt: „Du darfst Deepforge noch nicht betreten.“
 
 `restrict-server: true` sperrt Spieler ohne Recht auch für `/server deepforge` und andere Wege.
 
+## Netzwerk-Partys (ab DeepforgeProxy 1.1.0)
+Ist **PartyxFreundeSystem** auf dem Proxy installiert, überträgt DeepforgeProxy die Partys automatisch an
+den Deepforge-Server. Dort sind sie dann die Deepforge-Party (Camp, Minen, Dungeons).
+
+Es gibt nichts einzustellen. PartyxFreundeSystem bleibt unverändert, es braucht wie immer LuckPerms auf dem Proxy.
+Im Proxy-Log steht beim Start:
+```
+PartyxFreundeSystem erkannt: Netzwerk-Partys gehen an deepforge.
+Netzwerk-Partys aus PartyxFreundeSystem verbunden.
+```
+Der Kanal `deepforge:party` wird für Spieler blockiert, also können die Party-Daten nicht gefälscht werden.
+
 ## Befehle
 - `/deepforge`, `/df` – zum Deepforge-Server (Befehle in `commands:` änderbar)
 - `/dfproxy` (Recht `deepforge.proxy.admin`) – config neu laden
