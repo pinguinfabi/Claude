@@ -48,7 +48,7 @@ display:
   tab-list: true
   sidebar: true
   network-name: 'Axxin.de'
-  social: 'twitch.tv/fabiderpinguin'
+  social: 'twitch.tv/axxin_live'
   hosters: []
 ```
 

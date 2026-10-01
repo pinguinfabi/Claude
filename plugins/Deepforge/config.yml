@@ -57,6 +57,6 @@ display:
   # Chat im Netzwerk-Style: Rang-Tag, Name in Rangfarbe, » Nachricht.
   chat: true
   network-name: 'Axxin.de'
-  social: 'twitch.tv/fabiderpinguin'
+  social: 'twitch.tv/axxin_live'
   # Explicit names/UUIDs; wildcard permissions never turn every admin into HOSTER.
   hosters: []
