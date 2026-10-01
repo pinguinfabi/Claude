@@ -11,8 +11,8 @@ Vorher hatte das Wiki graue Minecraft-Knöpfe, gelbe Schrift und lila Tooltips. 
 
 Vorschau aus den echten Paket-Texturen und der Minecraft-Schrift (GUI-Größe 2):
 
-![Wiki-Start](bilder/wiki-vorschau-start.png)
-![Wiki-Seite Runen](bilder/wiki-vorschau-runen.png)
+![Wiki-Start](../bilder/wiki-vorschau-start.png)
+![Wiki-Seite Runen](../bilder/wiki-vorschau-runen.png)
 
 | Teil | Neu |
 |---|---|

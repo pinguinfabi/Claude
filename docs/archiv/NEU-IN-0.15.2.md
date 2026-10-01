@@ -18,7 +18,7 @@ Beim Serverstart steht im Log `Deepforge 0.15.2 ready`.
 
 Vorschau aus den echten Paket-Texturen und der Minecraft-Schrift:
 
-![Begleiter & Eier](bilder/wiki-vorschau-begleiter.png)
+![Begleiter & Eier](../bilder/wiki-vorschau-begleiter.png)
 
 ## Getestet
 - **314 Unit-Tests** grün. Neu:

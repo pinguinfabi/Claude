@@ -1,148 +1,130 @@
-DEEPFORGE – FRISCHES SERVERPAKET FÜR PAPER 1.21.8
-====================================================
+DEEPFORGE – OPEN BETA · SERVERPAKET FÜR PAPER 1.21.8
+=====================================================
 
-Das ist ein Server-Plugin, keine Fabric-/Forge-Mod.
+Deepforge ist ein Server-Plugin (keine Fabric-/Forge-Mod) für das Netzwerk Axxin.de.
 Benötigt: Minecraft Java 1.21.8, Paper 1.21.8 und Java 21.
-Getestete Umgebung: Paper Build 60, Citizens 2.0.39 Build 3887.
+Getestete Umgebung: Paper 1.21.8, Citizens 2.0.39 (Build 3887), LuckPerms 5.5.85.
 Paper/Minecraft selbst sind nicht in diesem ZIP enthalten.
 
+KURZFASSUNG
+-----------
 1. Server vollständig stoppen.
-2. Falls dort schon Deepforge installiert war: Abschnitt RESET unten ausführen.
-3. Dieses ZIP DIREKT in den Hauptordner des Servers entpacken.
-   Dort liegt auch dessen server.properties. Die JARs gehören nach plugins/,
-   nicht nach mods/. Es darf jeweils nur eine JAR je Plugin geben.
-   Vorhandene ältere JAR-Versionen gegebenenfalls aus plugins/ herausnehmen.
-4. Ressourcenpaket einrichten: Variante A oder B unten.
-5. Server normal starten. Kein /reload verwenden.
-6. Mit Minecraft Java 1.21.8 verbinden. Deepforge startet automatisch!
-   Niemand muss /df start eingeben. TAB-Liste und Infotafel sind bereits aktiv.
-   Vier freie Inventarplätze für Grundwerkzeuge bereithalten.
-   Das Dorf mit Wald und Minen wird beim ersten Eintritt aufgebaut.
-   Handbuch: Rechtsklick oder /df menu. Tutorial: /df tutorial.
+2. Lief schon eine ältere Deepforge-Version: nur plugins/Deepforge.jar ersetzen,
+   Spielstände bleiben erhalten. Für einen kompletten Neustart: Abschnitt RESET.
+3. Den Ordner plugins/ aus diesem ZIP in den Hauptordner des Servers kopieren
+   (dort, wo server.properties liegt). Je Plugin nur EINE JAR.
+4. Ressourcenpaket einrichten: Variante A, B oder C unten.
+5. Server starten (kein /reload). Mit Minecraft 1.21.8 verbinden.
+   Deepforge startet automatisch: Dorf, Wald und Minen entstehen beim ersten Start.
+   Spieler öffnen das Menü mit Rechtsklick auf das Handbuch oder /df menu.
 
 ENTHALTEN
 ---------
-plugins/Deepforge.jar                 Aktueller vollständiger Pluginstand
-plugins/Citizens.jar                  Passende vollständige NPC-Distribution
-plugins/LuckPerms.jar                 Berechtigungsverwaltung für TAB-Ränge
-plugins/Deepforge/config.yml          Frische Konfiguration ohne lokale Test-URL
-resourcepack/Deepforge-ResourcePack.zip  Eigene Texturen und Modelle
-resourcepack/pack.sha1                Prüfsumme des Ressourcenpakets
-docs/                                Anleitung, Änderungen und Prüfbericht
-licenses/                            Lizenzhinweise
-source/                              Deepforge-Quellcode
-SHA256SUMS.txt                        Prüfsummen aller enthaltenen Dateien
-START-HIER.html                       Übersichtliche Anleitung im Browser
+plugins/Deepforge.jar                    Das Spiel (aktuelle Version, siehe docs/)
+plugins/Citizens.jar                     NPC-Bibliothek für sichtbare Arbeiter
+plugins/LuckPerms.jar                    Rangverwaltung (frisch, ohne Benutzerdaten)
+plugins/Deepforge/config.yml             Frische Konfiguration
+resourcepack/Deepforge-ResourcePack.zip  Texturen, Modelle, Menüs, Axxin-Netzwerk-Schrift
+resourcepack/pack.sha1                   SHA-1 des Ressourcenpakets
+proxy/DeepforgeProxy.jar                 Optional: für BungeeCord/Waterfall (siehe docs/PROXY.md)
+docs/                                    Änderungen je Version, Anleitungen, Bilder
+docs/OPEN-BETA.md                        Überblick über alle Spielsysteme und Admin-Befehle
+docs/archiv/                             Ältere Versionshinweise und Konzepte
+source/                                  Quellcode von Deepforge und DeepforgeProxy
+licenses/                                Lizenzhinweise
+SHA256SUMS.txt                           Prüfsummen aller Dateien
+START-HIER.html                          Diese Anleitung übersichtlich im Browser
 
-WAS KOMMT WOHIN?
-----------------
-- Den gesamten plugins/-Ordner dieses ZIPs in den Server-Hauptordner kopieren.
-  Ergebnis: SERVER/plugins/Deepforge.jar, Citizens.jar, LuckPerms.jar und
-  SERVER/plugins/Deepforge/config.yml. Nicht SERVER/plugins/plugins/ erzeugen.
-- Die ZIP aus resourcepack/ gehört entweder in den Ressourcenpaketordner jedes
-  Minecraft-Clients oder auf deinen HTTPS-Webspace (siehe unten).
-- docs/, source/, licenses/ und die Anleitungsdateien sind Begleitmaterial;
-  sie müssen nicht in den plugins/-Ordner.
-- Paper 1.21.8 und Java 21 stellt dein Hoster bereit bzw. installierst du separat.
+UPDATE EINER BESTEHENDEN INSTALLATION
+-------------------------------------
+- Server stoppen, plugins/Deepforge.jar ersetzen, Server starten.
+- Die vorhandene plugins/Deepforge/config.yml wird NICHT überschrieben.
+  Bei einem neuen Ressourcenpaket die neue SHA-1 aus resourcepack/pack.sha1
+  unter resource-pack.sha1 eintragen (oder sha1 leer lassen, siehe Variante C).
+- Spielstände, Welt, Gilden und Arbeiter bleiben erhalten. Welt-Umbauten
+  (Dorf, Minen, Wald) laufen nach einem Update einmal automatisch.
 
-ALLE BISHERIGEN FUNKTIONEN
-------------------------
-Minen und Dorf, überarbeiteter Wald mit Sägewerk, Arbeiter und Offline-Produktion,
-Erz-/Holzglück, Gegenstände und Upgrades, Bosskämpfe und Lebensanzeigen,
-Party-Dungeons mit Leveln, Heilung, Tutorials, neue Menüführung sowie die
-Varo-TAB/Infotafel mit Rangfarben und automatischem Einstieg sind enthalten.
+RESSOURCENPAKET
+---------------
+Variante A – zum Testen:
+  resourcepack/Deepforge-ResourcePack.zip unverändert in den Ressourcenpaket-
+  ordner des Minecraft-Clients kopieren, ganz oben aktivieren und im Spiel
+  /df pack local eingeben (bestätigt nur, dass das Paket aktiv ist).
 
-FRISCHER SPIELSTART / RESET
---------------------------
-Das ZIP enthält KEINE Spielerprofile, Datenbanken, gebauten Welten,
-Arbeiter-Spielstände, Administratorlisten oder Zugangsdaten.
-Auf einem frischen Zielserver startet jeder mit den normalen Anfangswerten.
-Level, Geldfortschritt, Ausrüstung, Arbeiter, Boss-/Dungeonfortschritt,
-Tutorialfortschritt und Inventare aus unserem Testserver werden nicht übertragen.
-Das Anfangsgeld ist 250 $, wie im Spiel vorgesehen.
+Variante B – eigener Webspace:
+  Die ZIP unter einer direkten, öffentlichen HTTPS-Download-Adresse ablegen und in
+  plugins/Deepforge/config.yml eintragen:
+    resource-pack:
+      url: 'https://DEINE-DOMAIN/Deepforge-ResourcePack.zip'
+      sha1: '<Inhalt von resourcepack/pack.sha1>'
+      required: true
+  Eine Download-Seite, private Freigabe oder localhost-Adresse funktioniert nicht.
 
-WICHTIG: Entpacken allein entfernt KEINE bereits vorhandenen Spielstände.
-Für einen vollständigen Deepforge-Neustart auf einem bisher genutzten Server:
-- Bei noch laufendem Spiel zuerst /df leave ausführen und im normalen Spawn
-  ausloggen; bei mehreren Spielern alle Teilnehmer vorher austreten lassen.
-- Server stoppen und die Daten sichern.
-- Den bisherigen Ordner plugins/Deepforge AUS plugins/ heraus in die Sicherung
-  verschieben. Dabei auch profiles.db-wal und profiles.db-shm mitnehmen, falls da.
-- Die bisherige Spielwelt deepforge/ aus dem Server-Hauptordner in die Sicherung
-  verschieben. Bei abweichendem world-name den tatsächlich konfigurierten
-  Deepforge-Weltordner verwenden.
-- Erst danach dieses ZIP entpacken und den Server starten.
-Die neue Datenbank und Spielwelt werden automatisch erzeugt. Den Citizens-
-Datenordner nicht pauschal entfernen: fremde NPCs können dort gespeichert sein.
-Deepforge-Arbeiter werden aus den neuen Spielerprofilen erstellt.
-Andere Spielwelten und andere Plugins werden durch diesen Reset nicht gelöscht.
+Variante C – Deepforge verteilt das Paket selbst:
+  Das Paket steckt auch im Plugin. Mit
+    resource-pack:
+      sha1: ''
+      self-host:
+        enabled: true
+        port: 8765
+  bekommt jeder Spieler beim Betreten automatisch das passende Paket.
+  Der Port muss beim Hoster freigegeben sein.
 
-RESSOURCENPAKET – VARIANTE A: DIREKT TESTEN
-----------------------------------------
-Jeder Spieler kopiert resourcepack/Deepforge-ResourcePack.zip unverändert in
-den Ressourcenpaketordner seines Minecraft-Clients und aktiviert es ganz oben.
-Im Spiel anschließend /df pack local ausführen. Dieser Befehl bestätigt nur,
-dass das Paket manuell aktiviert wurde; er lädt keine Datei herunter.
-Die beigelegte Konfiguration ist für diesen Weg sofort verwendbar.
+Das Paket enthält das Axxin-Netzwerk-Paket 1:1 (Ränge, Symbole, Logos).
+Spieler brauchen also kein zweites Paket.
 
-RESSOURCENPAKET – VARIANTE B: AUTOMATISCH FÜR ALLE
-----------------------------------------------
-1. resourcepack/Deepforge-ResourcePack.zip auf deinem Webspace/Hoster unter
-   einer öffentlich erreichbaren direkten HTTPS-Download-Adresse bereitstellen.
-   Eine Download-Webseite, private Freigabe oder localhost-Adresse funktioniert
-   für andere Spieler nicht. Das Ablegen im Serverordner allein hostet keine Datei.
-2. Bei gestopptem Server in plugins/Deepforge/config.yml eintragen:
-
-   resource-pack:
-     url: 'https://DEINE-DOMAIN/Deepforge-ResourcePack.zip'
-     sha1: 'ab4b4717546c5a75955a28e54708539a4dd543ff'
-     required: true
-     textured-menus: true
-
-   Die Beispiel-Domain durch deine echte direkte Download-Adresse ersetzen.
-   Die richtige SHA-1 steht schon in der mitgelieferten config.yml.
-3. Server starten; Minecraft bietet das Paket beim Eintritt an.
-   Erneut anbieten: /df pack. Spieler müssen es annehmen.
-   Bei mehreren vorhandenen Ressourcenpaketen ist ein gemeinsames Pack nötig.
-
-SERVER-EINSTELLUNGEN
--------------------
-IP, Port, Whitelist, Online-Modus und Adminrechte konfigurierst du über deinen
-Hoster bzw. deinen bestehenden Server. Dieses ZIP überschreibt diese nicht.
-Es enthält keine server.properties und keine lokal gebundenen Startskripte.
-Beim ersten Start benötigt Citizens Internetzugriff für seine Bibliotheken;
-Spielerskins können ebenfalls Onlinezugriff benötigen.
-Die Spielfiguren benötigen weder einen Client-Mod noch ModelEngine.
-
-LUCKPERMS / RÄNGE
-----------------
-LuckPerms 5.5.85 (Bukkit-Version) ist frisch und OHNE Benutzerdaten beigelegt.
-Downloadquelle: https://luckperms.net/download
-Für eine Neuinstallation die mitgelieferte LuckPerms.jar verwenden.
-Bei einem bereits vorhandenen LuckPerms-Setup dessen JAR und Konfiguration
-beibehalten und die beigelegte Kopie nicht zusätzlich installieren.
-
-Ohne zugewiesenen Rang erscheinen Spieler grau. Neue LP-Gruppen können in der
-Serverkonsole so eingerichtet werden (ohne vorangestellten Schrägstrich):
+RÄNGE (LUCKPERMS)
+-----------------
+LuckPerms 5.5.85 liegt frisch und ohne Benutzerdaten bei. Gibt es schon ein
+LuckPerms-Setup: dessen JAR und Daten behalten, die beigelegte nicht installieren.
+Ränge werden über Rechte gesteuert, z. B. in der Serverkonsole:
   lp creategroup admin
   lp group admin permission set network.rank.admin true
-  lp creategroup vip
-  lp group vip permission set network.rank.vip true
-  lp user DEIN_SPIELERNAME parent add admin
-Den Platzhalter ersetzen und Ränge bewusst vergeben. Die gezeigten Rangrechte
-steuern die Darstellung, nicht automatisch sämtliche Server-Adminrechte.
-Es sind keine Spieler vorab als Administrator eingetragen.
-Alle Rangnamen und Farben: docs/TAB-UND-AUTOLOGIN.md.
+  lp user SPIELERNAME parent add admin
+Weitere Ränge: network.rank.teamleitung, dev, srmod, mod, helper, builder,
+media, partner, vip, sub, sub2, sub3 (varo.* wird ebenfalls erkannt).
+HOSTER wird in der Deepforge-config.yml unter display.hosters per Name oder UUID
+eingetragen. Ohne Rang ist der Name grau.
+Details und Farben: docs/TAB-UND-AUTOLOGIN.md.
 
-Präfixe/Sortierung entsprechen dem Varo-Code. Vorhandene network.rank.*- oder
-varo.*-Rechte werden erkannt. HOSTER wird ausdrücklich in display.hosters der
-Deepforge-Konfiguration über Name oder UUID eingetragen, nicht durch Wildcards.
+Deepforge-Rechte:
+  deepforge.play   Spielen (Standard: alle)
+  deepforge.admin  Admin- und Testbefehle unter /df admin (Standard: OP)
 
-PRÜFUNG
--------
-Aktuelles Deepforge-JAR auf dem lokalen Paper-Server gestartet und geprüft.
-144 automatisierte Tests bestanden; native Wald-, Menü- und Boardprüfung erfolgreich.
-Archivintegrität, Prüfsummen und Ausschluss sämtlicher Spielstände geprüft.
-LuckPerms aus offizieller Quelle geladen; JAR-Version und Archivintegrität geprüft.
-Die zusätzlich beigelegte LuckPerms-JAR wurde nicht neu auf dem Testserver gestartet.
-Kein Test auf deinem externen Hoster und keine neue Minecraft-Client-Abnahme.
+PROXY / NETZWERK (OPTIONAL)
+---------------------------
+proxy/DeepforgeProxy.jar gehört auf den BungeeCord-/Waterfall-Proxy, nicht auf den
+Deepforge-Server. Damit gilt:
+  - /deepforge bzw. /df führt von jedem Netzwerk-Server zu Deepforge.
+  - Partys aus PartyxFreundeSystem werden automatisch zur Deepforge-Party.
+    Sie bleiben auch nach einem Dungeon bestehen.
+Einrichtung: docs/PROXY.md.
+
+FRISCHER NEUSTART / RESET
+-------------------------
+Das ZIP enthält KEINE Spielerprofile, Datenbanken, Welten, Admin-Listen oder
+Zugangsdaten. Auf einem neuen Server startet jeder mit 250 $.
+Entpacken allein löscht aber keine alten Spielstände. Für einen kompletten Neustart:
+  1. Alle Spieler ausloggen lassen und den Server stoppen.
+  2. Sichern, dann diese Dateien und Ordner AUS dem Server verschieben:
+       plugins/Deepforge/  (inklusive profiles.db, -wal und -shm)
+       die Spielwelt deepforge/ (oder der unter world-name eingestellte Name)
+  3. Dieses ZIP einsetzen und den Server starten.
+Datenbank und Welt entstehen neu. Den Citizens-Ordner nicht pauschal löschen,
+dort können fremde NPCs liegen. Andere Welten und Plugins bleiben unberührt.
+
+SERVER-EINSTELLUNGEN
+--------------------
+IP, Port, Whitelist, Online-Modus und OP-Rechte stellst du wie gewohnt bei deinem
+Hoster ein; dieses ZIP enthält keine server.properties. Citizens braucht beim
+ersten Start Internetzugang für seine Bibliotheken. Für die Figuren ist weder ein
+Client-Mod noch ModelEngine nötig.
+
+PRÜFUNG DIESER VERSION
+----------------------
+- Alle automatisierten Tests bestanden (Anzahl siehe docs/NEU-IN-<Version>.md).
+- Auf einem lokalen Paper-1.21.8-Server mit Test-Bots gestartet und durchgespielt.
+- Ressourcenpaket geprüft: ZIP intakt, alle Modelle und Texturen vorhanden,
+  Axxin-Dateien byte-gleich.
+- Prüfsummen aller Dateien in SHA256SUMS.txt.
+Nicht geprüft: dein externer Hoster und echte Minecraft-Clients.
