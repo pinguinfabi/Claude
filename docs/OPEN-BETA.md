@@ -53,6 +53,8 @@ Dieser Überblick ist für dich und dein Team, z. B. für Ankündigungen, Suppor
 |---|---|
 | `/df admin` | Moderationsmenü |
 | `/df admin modus` | Admin-Modus an/aus |
+| `/df admin bau` · `bau hilfe` | Bau-Modus: Welt und Dungeon-Räume dauerhaft bearbeiten (siehe NEU-IN-0.23.0.md) |
+| `/df admin bau dungeon <gewölbe\|glutschmiede\|frostkrypta>` | Dungeon-Werkstatt ohne Gegner zum Umbauen der Räume |
 | `/df admin money <Betrag>` | Testgeld |
 | `/df admin gebiet <1–17>` | bis zu dieser Mine freischalten und hinreisen |
 | `/df admin gott` | unverwundbar an/aus |
