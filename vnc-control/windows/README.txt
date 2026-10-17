@@ -10,7 +10,7 @@ Voraussetzungen
 Benutzung
 ---------
 1. Minecraft-VNC-Control.exe starten.
-2. Server 178.105.144.81, Port 22 und Benutzer vncguest stehen bereits drin.
+2. Server 173.249.38.29, Port 22 und Benutzer vncguest stehen bereits drin.
 3. Das eigens für vncguest gesetzte Passwort eingeben.
 4. Beim ersten Start den angezeigten SSH-Fingerabdruck mit der Ausgabe des
    Server-Installers vergleichen und erst dann bestätigen.
@@ -25,7 +25,7 @@ Sicherheit
   bestätigten SSH-Fingerabdruck unter:
   %LOCALAPPDATA%\MinecraftVncControl\settings.json
 - Der Benutzer vncguest besitzt keine normale Shell und darf ausschließlich
-  die fünf lokalen VNC-Ports weiterleiten sowie feste Status-/Neustartbefehle
+  die sechs lokalen VNC-Ports (5902 bis 5907) weiterleiten sowie feste Status-/Neustartbefehle
   ausführen.
 - Niemals das normale Linux-Passwort des Benutzers autosell weitergeben.
 
@@ -36,3 +36,18 @@ Fehlerbehebung
 - TigerVNC fehlt: Unten über "Auswählen …" vncviewer.exe auswählen.
 - SSH-Schlüssel geändert: Nicht blind bestätigen. Auf dem Server mit
   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256 prüfen.
+
+Version 1.3.0
+-------------
+- Neues dunkles Design, sechs Accounts: afk2 (Crafter) und afk3 bis afk7.
+- Namen und Notizen pro Account mit dem Stift-Knopf ändern. Sie werden in
+  settings.json gespeichert (nur auf diesem PC).
+- Gestoppte Clients (z. B. noch ohne Account-Login) werden nie automatisch
+  gestartet; nur eine ausgefallene VNC-Brücke wird automatisch repariert.
+- Neuer Standardserver 173.249.38.29. Der SSH-Fingerabdruck wird je Server
+  gespeichert und beim ersten Verbinden neu bestätigt.
+
+Selbst bauen (nur wenn das .NET 9 SDK installiert ist)
+------------------------------------------------------
+  cd MinecraftVncControl
+  dotnet publish -c Release -r win-x64 -o ..\release

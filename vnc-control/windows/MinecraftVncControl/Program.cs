@@ -17,42 +17,132 @@ internal static class Program
     }
 }
 
+internal static class Theme
+{
+    public static readonly Color Bg = Color.FromArgb(0x14, 0x16, 0x1B);
+    public static readonly Color Header = Color.FromArgb(0x1A, 0x1D, 0x24);
+    public static readonly Color Card = Color.FromArgb(0x1F, 0x23, 0x2B);
+    public static readonly Color CardHover = Color.FromArgb(0x2B, 0x30, 0x3A);
+    public static readonly Color Input = Color.FromArgb(0x2A, 0x2F, 0x39);
+    public static readonly Color Text = Color.FromArgb(0xE8, 0xEA, 0xED);
+    public static readonly Color Muted = Color.FromArgb(0x8B, 0x93, 0xA1);
+    public static readonly Color Accent = Color.FromArgb(0x4C, 0x8D, 0xFF);
+    public static readonly Color AccentHover = Color.FromArgb(0x6B, 0xA0, 0xFF);
+    public static readonly Color Ok = Color.FromArgb(0x3D, 0xDC, 0x84);
+    public static readonly Color Warn = Color.FromArgb(0xFF, 0xB0, 0x20);
+    public static readonly Color Bad = Color.FromArgb(0xFF, 0x5C, 0x5C);
+    public static readonly Color Idle = Color.FromArgb(0x6B, 0x72, 0x80);
+}
+
+/// <summary>Flacher Button im dunklen Stil.</summary>
+internal sealed class FlatButton : Button
+{
+    private readonly bool primary;
+    private bool hover;
+
+    public FlatButton(string text, bool primary = false, int width = 132)
+    {
+        this.primary = primary;
+        Text = text;
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        Cursor = Cursors.Hand;
+        UseVisualStyleBackColor = false;
+        Size = new Size(width, 36);
+        Margin = new Padding(0, 0, 8, 0);
+        ApplyColors();
+    }
+
+    protected override void OnEnabledChanged(EventArgs e)
+    {
+        base.OnEnabledChanged(e);
+        ApplyColors();
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        hover = true;
+        ApplyColors();
+        base.OnMouseEnter(e);
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        hover = false;
+        ApplyColors();
+        base.OnMouseLeave(e);
+    }
+
+    private void ApplyColors()
+    {
+        if (!Enabled)
+        {
+            BackColor = Theme.Input;
+            ForeColor = Theme.Muted;
+            return;
+        }
+        BackColor = primary ? (hover ? Theme.AccentHover : Theme.Accent) : (hover ? Theme.CardHover : Theme.Input);
+        ForeColor = primary ? Color.White : Theme.Text;
+    }
+}
+
 internal sealed class MainForm : Form
 {
-    private const string DefaultHost = "178.105.144.81";
+    private const string DefaultHost = "173.249.38.29";
     private const string DefaultUser = "vncguest";
     private const int DefaultSshPort = 22;
     private const int StatusIntervalMs = 5_000;
 
-    private readonly TextBox hostBox = new() { Text = DefaultHost };
-    private readonly NumericUpDown portBox = new() { Minimum = 1, Maximum = 65535, Value = DefaultSshPort };
-    private readonly TextBox userBox = new() { Text = DefaultUser };
-    private readonly TextBox passwordBox = new() { UseSystemPasswordChar = true };
-    private readonly TextBox viewerBox = new();
-    private readonly Button connectButton = new() { Text = "Verbinden" };
-    private readonly Button disconnectButton = new() { Text = "Trennen", Enabled = false };
-    private readonly Button openAllButton = new() { Text = "Alle VNC-Fenster öffnen", Enabled = false };
-    private readonly Button refreshButton = new() { Text = "Status aktualisieren", Enabled = false };
-    private readonly Label connectionLabel = new() { Text = "Nicht verbunden", AutoSize = true };
-    private readonly Label messageLabel = new() { Text = "Passwort wird nur im Arbeitsspeicher gehalten und nie gespeichert.", AutoSize = true };
+    /// <summary>Feste Ziele auf dem Server (Id = Name in vnc-control, Port = VNC-Port auf dem Server).</summary>
+    private static readonly TargetDef[] Targets =
+    {
+        new("afk2", "Crafter", "Crafter-Account", 5902),
+        new("afk3", "Account 1", "", 5903),
+        new("afk4", "Account 2", "", 5904),
+        new("afk5", "Account 3", "", 5905),
+        new("afk6", "Account 4", "", 5906),
+        new("afk7", "Account 5", "", 5907)
+    };
+
+    private readonly TextBox hostBox = MakeTextBox();
+    private readonly NumericUpDown portBox = new()
+    {
+        Minimum = 1, Maximum = 65535, Value = DefaultSshPort,
+        BackColor = Theme.Input, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle
+    };
+    private readonly TextBox userBox = MakeTextBox();
+    private readonly TextBox passwordBox = MakeTextBox(password: true);
+    private readonly TextBox viewerBox = MakeTextBox();
+    private readonly FlatButton connectButton = new("Verbinden", primary: true, width: 150);
+    private readonly FlatButton disconnectButton = new("Trennen") { Enabled = false };
+    private readonly FlatButton openAllButton = new("Alle öffnen", primary: true) { Enabled = false };
+    private readonly FlatButton refreshButton = new("Aktualisieren") { Enabled = false };
+    private readonly Label connectionLabel = new() { AutoSize = true, ForeColor = Theme.Muted, Text = "● Nicht verbunden" };
+    private readonly Label summaryLabel = new() { AutoSize = true, ForeColor = Theme.Muted, Text = "" };
+    private readonly Label messageLabel = new()
+    {
+        AutoSize = true, ForeColor = Theme.Muted,
+        Text = "Das Passwort wird nur im Arbeitsspeicher gehalten und nie gespeichert."
+    };
     private readonly System.Windows.Forms.Timer statusTimer = new() { Interval = StatusIntervalMs };
     private readonly SemaphoreSlim commandLock = new(1, 1);
-    private readonly List<AccountPanel> accounts = new();
+    private readonly List<AccountCard> accounts = new();
+    private Control connectionPanel = null!;
 
     private AppSettings settings;
     private SshClient? sshClient;
     private bool disconnecting;
-    private int autoSellVncFailures;
-    private DateTime autoSellRepairNotBeforeUtc = DateTime.MinValue;
 
     public MainForm()
     {
         settings = AppSettings.Load();
         Text = "Minecraft VNC Control";
-        MinimumSize = new Size(780, 650);
-        Size = new Size(900, 760);
+        MinimumSize = new Size(760, 640);
+        Size = new Size(920, 820);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10F);
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
 
         hostBox.Text = string.IsNullOrWhiteSpace(settings.Host) ? DefaultHost : settings.Host;
         portBox.Value = settings.Port is >= 1 and <= 65535 ? settings.Port : DefaultSshPort;
@@ -65,169 +155,209 @@ internal sealed class MainForm : Form
         openAllButton.Click += (_, _) => OpenAll();
         refreshButton.Click += async (_, _) => await RefreshStatusAsync(showErrors: true);
         statusTimer.Tick += async (_, _) => await RefreshStatusAsync(showErrors: false);
+        passwordBox.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                await ConnectAsync();
+            }
+        };
         FormClosing += (_, _) => Disconnect();
+        UpdateSummary();
     }
+
+    private static TextBox MakeTextBox(bool password = false) => new()
+    {
+        BackColor = Theme.Input,
+        ForeColor = Theme.Text,
+        BorderStyle = BorderStyle.FixedSingle,
+        UseSystemPasswordChar = password
+    };
+
+    // ---------------------------------------------------------------- UI
 
     private void BuildUi()
     {
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(16),
             ColumnCount = 1,
             RowCount = 5,
-            AutoScroll = true
+            BackColor = Theme.Bg
         };
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));     // Kopf
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));     // Verbindung
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));     // Werkzeugleiste
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Accounts
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));     // Fuß
 
-        var title = new Label
+        // Kopf
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            BackColor = Theme.Header,
+            Padding = new Padding(22, 16, 22, 16)
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var titleBox = new FlowLayoutPanel
+        {
+            AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Theme.Header
+        };
+        titleBox.Controls.Add(new Label
         {
             Text = "Minecraft VNC Control",
             Font = new Font(Font.FontFamily, 18F, FontStyle.Bold),
+            ForeColor = Theme.Text,
             AutoSize = true,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        root.Controls.Add(title, 0, 0);
+            Margin = new Padding(0)
+        });
+        titleBox.Controls.Add(new Label
+        {
+            Text = "AFK-Accounts steuern und anzeigen",
+            ForeColor = Theme.Muted,
+            AutoSize = true,
+            Margin = new Padding(0, 2, 0, 0)
+        });
+        header.Controls.Add(titleBox, 0, 0);
+        connectionLabel.Anchor = AnchorStyles.Right;
+        connectionLabel.Font = new Font(Font.FontFamily, 10.5F, FontStyle.Bold);
+        header.Controls.Add(connectionLabel, 1, 0);
+        root.Controls.Add(header, 0, 0);
 
+        // Verbindung
         var connection = new TableLayoutPanel
         {
+            Dock = DockStyle.Fill,
             AutoSize = true,
-            Dock = DockStyle.Top,
-            ColumnCount = 8,
-            Margin = new Padding(0, 0, 0, 14)
+            ColumnCount = 5,
+            Padding = new Padding(22, 16, 22, 4),
+            BackColor = Theme.Bg
         };
+        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
+        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         connection.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 75));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        connection.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-
-        AddLabeledControl(connection, "Server", hostBox, 0);
-        AddLabeledControl(connection, "Port", portBox, 2);
-        AddLabeledControl(connection, "Benutzer", userBox, 4);
-        AddLabeledControl(connection, "Passwort", passwordBox, 6);
-        foreach (Control control in new Control[] { hostBox, portBox, userBox, passwordBox })
-        {
-            control.Dock = DockStyle.Fill;
-            control.Margin = new Padding(5, 3, 12, 8);
-        }
+        AddField(connection, "Server", hostBox, 0);
+        AddField(connection, "Port", portBox, 1);
+        AddField(connection, "Benutzer", userBox, 2);
+        AddField(connection, "Passwort", passwordBox, 3);
+        connectButton.Anchor = AnchorStyles.Bottom;
+        connectButton.Margin = new Padding(6, 0, 0, 8);
+        connection.Controls.Add(connectButton, 4, 1);
+        connectionPanel = connection;
         root.Controls.Add(connection, 0, 1);
 
-        var accountContainer = new FlowLayoutPanel
+        // Werkzeugleiste
+        var toolbar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Padding = new Padding(22, 10, 22, 6),
+            BackColor = Theme.Bg,
+            WrapContents = false
+        };
+        toolbar.Controls.Add(openAllButton);
+        toolbar.Controls.Add(refreshButton);
+        toolbar.Controls.Add(disconnectButton);
+        summaryLabel.Margin = new Padding(12, 9, 0, 0);
+        toolbar.Controls.Add(summaryLabel);
+        root.Controls.Add(toolbar, 0, 2);
+
+        // Accounts
+        var list = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoScroll = true
+            AutoScroll = true,
+            Padding = new Padding(22, 8, 14, 8),
+            BackColor = Theme.Bg
         };
-        accounts.Add(CreateAccount("autosell", "AutoSell-Account", 15901, 5901));
-        accounts.Add(CreateAccount("afk2", "Zweiter AFK-Account", 15902, 5902));
-        accounts.Add(CreateAccount("afk3", "Dritter AFK-Account", 15903, 5903));
-        accounts.Add(CreateAccount("afk4", "Vierter AFK-Account", 15904, 5904));
-        accounts.Add(CreateAccount("autosell2", "Zweiter AutoSell-Account", 15905, 5905));
-        foreach (var account in accounts)
+        foreach (var target in Targets)
         {
-            accountContainer.Controls.Add(account.Container);
+            var card = new AccountCard(target, settings.LabelFor(target), 15000 + (target.Port % 100));
+            card.OpenButton.Click += (_, _) => OpenViewer(card, silent: false);
+            card.RestartButton.Click += async (_, _) => await RestartAsync(card);
+            card.EditButton.Click += (_, _) => EditLabel(card);
+            accounts.Add(card);
+            list.Controls.Add(card);
         }
-        accountContainer.Resize += (_, _) =>
+        void ResizeCards()
         {
-            foreach (var account in accounts)
+            foreach (var card in accounts)
             {
-                account.Container.Width = Math.Max(650, accountContainer.ClientSize.Width - 24);
+                card.Width = Math.Max(560, list.ClientSize.Width - list.Padding.Horizontal);
             }
-        };
-        root.Controls.Add(accountContainer, 0, 2);
+        }
+        list.Resize += (_, _) => ResizeCards();
+        ResizeCards();
+        root.Controls.Add(list, 0, 3);
 
-        var viewerRow = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 3 };
-        viewerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        viewerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        viewerRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        viewerRow.Controls.Add(new Label { Text = "TigerVNC", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
+        // Fuß: Viewer-Pfad und Meldungen
+        var footer = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 3,
+            RowCount = 2,
+            Padding = new Padding(22, 8, 22, 14),
+            BackColor = Theme.Header
+        };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        footer.Controls.Add(new Label { Text = "TigerVNC", AutoSize = true, ForeColor = Theme.Muted, Anchor = AnchorStyles.Left }, 0, 0);
         viewerBox.Dock = DockStyle.Fill;
         viewerBox.Margin = new Padding(8, 3, 8, 3);
-        viewerRow.Controls.Add(viewerBox, 1, 0);
-        var browseButton = new Button { Text = "Auswählen …", AutoSize = true };
+        footer.Controls.Add(viewerBox, 1, 0);
+        var browseButton = new FlatButton("Auswählen …", width: 120) { Margin = new Padding(0) };
         browseButton.Click += (_, _) => SelectViewer();
-        viewerRow.Controls.Add(browseButton, 2, 0);
-        root.Controls.Add(viewerRow, 0, 3);
-
-        var footer = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            Dock = DockStyle.Bottom,
-            FlowDirection = FlowDirection.LeftToRight,
-            Padding = new Padding(0, 12, 0, 0)
-        };
-        footer.Controls.Add(connectButton);
-        footer.Controls.Add(disconnectButton);
-        footer.Controls.Add(openAllButton);
-        footer.Controls.Add(refreshButton);
-        footer.Controls.Add(connectionLabel);
-        footer.Controls.Add(messageLabel);
+        footer.Controls.Add(browseButton, 2, 0);
+        messageLabel.Margin = new Padding(0, 8, 0, 0);
+        footer.Controls.Add(messageLabel, 0, 1);
+        footer.SetColumnSpan(messageLabel, 3);
         root.Controls.Add(footer, 0, 4);
 
         Controls.Add(root);
     }
 
-    private static void AddLabeledControl(TableLayoutPanel panel, string label, Control control, int column)
+    private static void AddField(TableLayoutPanel panel, string label, Control control, int column)
     {
-        panel.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, column, 0);
-        panel.Controls.Add(control, column + 1, 0);
+        panel.Controls.Add(new Label
+        {
+            Text = label, AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(6, 0, 0, 2)
+        }, column, 0);
+        control.Dock = DockStyle.Fill;
+        control.Margin = new Padding(6, 0, 6, 8);
+        panel.Controls.Add(control, column, 1);
     }
 
-    private AccountPanel CreateAccount(string id, string title, int localPort, int remotePort)
-    {
-        var container = new Panel
-        {
-            Height = 112,
-            Width = 800,
-            BorderStyle = BorderStyle.FixedSingle,
-            Margin = new Padding(0, 0, 0, 10)
-        };
-        var titleLabel = new Label
-        {
-            Text = title,
-            Font = new Font(Font.FontFamily, 12F, FontStyle.Bold),
-            AutoSize = true,
-            Location = new Point(14, 12)
-        };
-        var statusLabel = new Label
-        {
-            Text = "Nicht verbunden",
-            AutoSize = true,
-            ForeColor = Color.DimGray,
-            Location = new Point(14, 46)
-        };
-        var openButton = new Button
-        {
-            Text = "VNC öffnen",
-            Enabled = false,
-            Size = new Size(125, 34),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(container.Width - 282, 28)
-        };
-        var restartButton = new Button
-        {
-            Text = "Neu starten",
-            Enabled = false,
-            Size = new Size(125, 34),
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(container.Width - 145, 28)
-        };
-        container.Controls.AddRange(new Control[] { titleLabel, statusLabel, openButton, restartButton });
+    // ---------------------------------------------------------------- Namen
 
-        var account = new AccountPanel(id, title, localPort, remotePort, container, statusLabel, openButton, restartButton);
-        openButton.Click += (_, _) => OpenViewer(account);
-        restartButton.Click += async (_, _) => await RestartAsync(account);
-        return account;
+    private void EditLabel(AccountCard card)
+    {
+        using var dialog = new RenameDialog(card.Target.Id, card.Label.Name, card.Label.Note);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        var name = dialog.NameValue.Trim();
+        card.SetLabel(new AccountLabel
+        {
+            Name = string.IsNullOrWhiteSpace(name) ? card.Target.DefaultName : name,
+            Note = dialog.NoteValue.Trim()
+        });
+        settings.Names[card.Target.Id] = card.Label;
+        settings.Save();
     }
+
+    // ---------------------------------------------------------------- Verbindung
 
     private async Task ConnectAsync()
     {
@@ -267,7 +397,7 @@ internal sealed class MainForm : Form
                     "127.0.0.1",
                     (uint)account.LocalPort,
                     "127.0.0.1",
-                    (uint)account.RemotePort);
+                    (uint)account.Target.Port);
                 client.AddForwardedPort(forwarding);
                 forwarding.Start();
                 account.Forwarding = forwarding;
@@ -284,11 +414,11 @@ internal sealed class MainForm : Form
             refreshButton.Enabled = true;
             foreach (var account in accounts)
             {
-                account.OpenButton.Enabled = true;
-                account.RestartButton.Enabled = true;
+                account.SetConnected(true);
             }
-            connectionLabel.Text = "Verbunden";
-            connectionLabel.ForeColor = Color.ForestGreen;
+            connectionPanel.Visible = false;
+            connectionLabel.Text = $"● Verbunden mit {settings.Host}";
+            connectionLabel.ForeColor = Theme.Ok;
             messageLabel.Text = "Sicherer Tunnel aktiv. Das Passwort wurde nicht gespeichert.";
             passwordBox.Clear();
             statusTimer.Start();
@@ -308,29 +438,32 @@ internal sealed class MainForm : Form
 
     private void VerifyHostKey(HostKeyEventArgs eventArgs)
     {
+        var host = hostBox.Text.Trim();
         var fingerprint = "SHA256:" + Convert.ToBase64String(SHA256.HashData(eventArgs.HostKey)).TrimEnd('=');
-        if (!string.IsNullOrWhiteSpace(settings.TrustedHostKey))
+        if (settings.TrustedHostKeys.TryGetValue(host, out var trusted) && !string.IsNullOrWhiteSpace(trusted))
         {
-            eventArgs.CanTrust = string.Equals(settings.TrustedHostKey, fingerprint, StringComparison.Ordinal);
+            eventArgs.CanTrust = string.Equals(trusted, fingerprint, StringComparison.Ordinal);
             if (!eventArgs.CanTrust)
             {
                 BeginInvoke(() => MessageBox.Show(this,
-                    $"Der SSH-Schlüssel des Servers hat sich geändert.\n\nGespeichert: {settings.TrustedHostKey}\nAktuell: {fingerprint}\n\nNicht verbinden, bevor die Änderung geprüft wurde.",
+                    $"Der SSH-Schlüssel des Servers hat sich geändert.\n\nGespeichert: {trusted}\nAktuell: {fingerprint}\n\nNicht verbinden, bevor die Änderung geprüft wurde.",
                     "Sicherheitswarnung", MessageBoxButtons.OK, MessageBoxIcon.Stop));
             }
             return;
         }
 
         var result = (DialogResult)Invoke(() => MessageBox.Show(this,
-            $"Erste Verbindung zu {hostBox.Text}.\n\nSSH-Fingerabdruck:\n{fingerprint}\n\nNur bestätigen, wenn dies dein Server ist.",
+            $"Erste Verbindung zu {host}.\n\nSSH-Fingerabdruck:\n{fingerprint}\n\nNur bestätigen, wenn dies dein Server ist.",
             "Server-Schlüssel bestätigen", MessageBoxButtons.YesNo, MessageBoxIcon.Question));
         eventArgs.CanTrust = result == DialogResult.Yes;
         if (eventArgs.CanTrust)
         {
-            settings.TrustedHostKey = fingerprint;
+            settings.TrustedHostKeys[host] = fingerprint;
             settings.Save();
         }
     }
+
+    // ---------------------------------------------------------------- Status
 
     private async Task RefreshStatusAsync(bool showErrors)
     {
@@ -345,58 +478,44 @@ internal sealed class MainForm : Form
             var parsed = ParseStatus(result);
             foreach (var account in accounts)
             {
-                if (!parsed.TryGetValue(account.Id, out var status))
+                if (!parsed.TryGetValue(account.Target.Id, out var status))
                 {
-                    SetAccountStatus(account, "Status unbekannt", Color.DarkOrange);
+                    account.SetStatus("Status unbekannt", Theme.Warn);
+                    account.ServiceActive = false;
                     continue;
                 }
 
-                if (status.Service == "active" && status.Vnc == "up")
+                account.ServiceActive = status.Service == "active";
+                switch (status.Service)
                 {
-                    SetAccountStatus(account, "ONLINE – Client und VNC erreichbar", Color.ForestGreen);
+                    case "active" when status.Vnc == "up":
+                        account.SetStatus("Online – Client und VNC erreichbar", Theme.Ok);
+                        break;
+                    case "active":
+                        account.SetStatus("Client läuft – VNC wird verbunden …", Theme.Warn);
+                        break;
+                    case "activating":
+                        account.SetStatus("Startet …", Theme.Warn);
+                        break;
+                    case "missing":
+                        account.SetStatus("Nicht eingerichtet", Theme.Bad);
+                        break;
+                    case "inactive":
+                        account.SetStatus("Gestoppt – mit „Neu starten“ starten", Theme.Idle);
+                        break;
+                    default:
+                        account.SetStatus($"Client {status.Service} – Neustart erforderlich", Theme.Bad);
+                        break;
                 }
-                else if (status.Service == "missing")
-                {
-                    SetAccountStatus(account, "Nicht eingerichtet", Color.Firebrick);
-                }
-                else if (status.Service == "active")
-                {
-                    SetAccountStatus(account, "Client läuft – VNC wird repariert", Color.DarkOrange);
-                }
-                else
-                {
-                    SetAccountStatus(account, $"Client {status.Service} – Neustart erforderlich", Color.Firebrick);
-                }
-            }
 
-            var autoSell = parsed.GetValueOrDefault("autosell");
-            var autoSellNeedsHelp = autoSell is not null
-                                    && autoSell.Service != "missing"
-                                    && (autoSell.Service != "active" || autoSell.Vnc != "up");
-            if (autoSellNeedsHelp && DateTime.UtcNow >= autoSellRepairNotBeforeUtc)
-            {
-                autoSellVncFailures++;
-                if (autoSellVncFailures >= 2)
-                {
-                    autoSellVncFailures = 0;
-                    autoSellRepairNotBeforeUtc = DateTime.UtcNow.AddSeconds(90);
-                    var action = autoSell!.Service == "active" ? "repair" : "restart";
-                    await Task.Run(() => RunCommand($"vnc-control {action} autosell"));
-                    messageLabel.Text = action == "repair"
-                        ? "AutoSell-VNC wurde automatisch repariert."
-                        : "Der gestoppte AutoSell-Client wurde automatisch neu gestartet.";
-                }
+                await AutoRepairAsync(account, status);
             }
-            else if (!autoSellNeedsHelp)
-            {
-                autoSellVncFailures = 0;
-                autoSellRepairNotBeforeUtc = DateTime.MinValue;
-            }
+            UpdateSummary();
         }
         catch (Exception ex)
         {
-            connectionLabel.Text = "Verbindungsfehler";
-            connectionLabel.ForeColor = Color.Firebrick;
+            connectionLabel.Text = "● Verbindungsfehler";
+            connectionLabel.ForeColor = Theme.Bad;
             if (showErrors)
             {
                 MessageBox.Show(this, FriendlyError(ex), "Status konnte nicht gelesen werden",
@@ -409,23 +528,55 @@ internal sealed class MainForm : Form
         }
     }
 
-    private async Task RestartAsync(AccountPanel account)
+    /// <summary>Repariert nur die VNC-Brücke eines laufenden Clients; gestoppte Clients werden nie automatisch gestartet.</summary>
+    private async Task AutoRepairAsync(AccountCard account, RemoteStatus status)
+    {
+        var needsRepair = status.Service == "active" && status.Vnc != "up";
+        if (!needsRepair)
+        {
+            account.VncFailures = 0;
+            account.RepairNotBeforeUtc = DateTime.MinValue;
+            return;
+        }
+        if (DateTime.UtcNow < account.RepairNotBeforeUtc)
+        {
+            return;
+        }
+        if (++account.VncFailures < 2)
+        {
+            return;
+        }
+
+        account.VncFailures = 0;
+        account.RepairNotBeforeUtc = DateTime.UtcNow.AddSeconds(90);
+        await Task.Run(() => RunCommand($"vnc-control repair {account.Target.Id}"));
+        messageLabel.Text = $"VNC von „{account.Label.Name}“ wurde automatisch repariert.";
+    }
+
+    private void UpdateSummary()
+    {
+        var total = accounts.Count;
+        var online = accounts.Count(a => a.IsOnline);
+        summaryLabel.Text = sshClient?.IsConnected == true ? $"{online} von {total} online" : "";
+    }
+
+    private async Task RestartAsync(AccountCard account)
     {
         if (MessageBox.Show(this,
-                $"{account.Title} wirklich neu starten?\nDie aktuelle Minecraft-Verbindung wird dabei kurz getrennt.",
+                $"„{account.Label.Name}“ ({account.Target.Id}) wirklich neu starten?\nDie aktuelle Minecraft-Verbindung wird dabei kurz getrennt.",
                 "Neustart bestätigen", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
             return;
         }
 
         account.RestartButton.Enabled = false;
-        messageLabel.Text = $"{account.Title} wird neu gestartet …";
+        messageLabel.Text = $"„{account.Label.Name}“ wird neu gestartet …";
         await commandLock.WaitAsync();
         try
         {
-            var result = await Task.Run(() => RunCommand($"vnc-control restart {account.Id}"));
+            var result = await Task.Run(() => RunCommand($"vnc-control restart {account.Target.Id}"));
             messageLabel.Text = string.IsNullOrWhiteSpace(result) ? "Neustart wurde ausgelöst." : result.Trim();
-            SetAccountStatus(account, "Startet …", Color.DarkOrange);
+            account.SetStatus("Startet …", Theme.Warn);
         }
         catch (Exception ex)
         {
@@ -476,28 +627,43 @@ internal sealed class MainForm : Form
         return result;
     }
 
+    // ---------------------------------------------------------------- Viewer
+
     private void OpenAll()
     {
-        foreach (var account in accounts)
+        var opened = 0;
+        foreach (var account in accounts.Where(a => a.ServiceActive))
         {
-            OpenViewer(account);
+            if (OpenViewer(account, silent: true))
+            {
+                opened++;
+            }
         }
+        messageLabel.Text = opened == 0
+            ? "Kein Account ist gerade online."
+            : $"{opened} VNC-Fenster geöffnet.";
     }
 
-    private void OpenViewer(AccountPanel account)
+    private bool OpenViewer(AccountCard account, bool silent)
     {
         var viewer = viewerBox.Text.Trim();
         if (!File.Exists(viewer))
         {
-            MessageBox.Show(this, "TigerVNC wurde nicht gefunden. Bitte unten über ‚Auswählen …‘ die Datei vncviewer.exe auswählen.",
-                "TigerVNC fehlt", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
+            if (!silent)
+            {
+                MessageBox.Show(this, "TigerVNC wurde nicht gefunden. Bitte unten über ‚Auswählen …‘ die Datei vncviewer.exe auswählen.",
+                    "TigerVNC fehlt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            return false;
         }
         if (!IsLocalPortOpen(account.LocalPort))
         {
-            MessageBox.Show(this, "Der SSH-Tunnel ist noch nicht erreichbar. Bitte kurz warten und den Status aktualisieren.",
-                "Tunnel nicht bereit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
+            if (!silent)
+            {
+                MessageBox.Show(this, "Der SSH-Tunnel ist noch nicht erreichbar. Bitte kurz warten und den Status aktualisieren.",
+                    "Tunnel nicht bereit", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            return false;
         }
 
         settings.ViewerPath = viewer;
@@ -508,6 +674,7 @@ internal sealed class MainForm : Form
             Arguments = $"127.0.0.1::{account.LocalPort}",
             UseShellExecute = true
         });
+        return true;
     }
 
     private static bool IsLocalPortOpen(int port)
@@ -538,6 +705,8 @@ internal sealed class MainForm : Form
         }
     }
 
+    // ---------------------------------------------------------------- Trennen / UI-Zustand
+
     private void Disconnect()
     {
         if (disconnecting)
@@ -553,9 +722,7 @@ internal sealed class MainForm : Form
                 try { account.Forwarding?.Stop(); } catch { }
                 account.Forwarding?.Dispose();
                 account.Forwarding = null;
-                account.OpenButton.Enabled = false;
-                account.RestartButton.Enabled = false;
-                SetAccountStatus(account, "Nicht verbunden", Color.DimGray);
+                account.SetConnected(false);
             }
             try { sshClient?.Disconnect(); } catch { }
             sshClient?.Dispose();
@@ -572,25 +739,22 @@ internal sealed class MainForm : Form
             portBox.Enabled = true;
             userBox.Enabled = true;
             passwordBox.Enabled = true;
-            connectionLabel.Text = "Nicht verbunden";
-            connectionLabel.ForeColor = Color.DimGray;
-            messageLabel.Text = "Passwort wird nur im Arbeitsspeicher gehalten und nie gespeichert.";
+            connectionPanel.Visible = true;
+            connectionLabel.Text = "● Nicht verbunden";
+            connectionLabel.ForeColor = Theme.Muted;
+            messageLabel.Text = "Das Passwort wird nur im Arbeitsspeicher gehalten und nie gespeichert.";
+            UpdateSummary();
         }
     }
 
     private void SetConnectingUi(bool connecting)
     {
-        connectButton.Enabled = !connecting && sshClient?.IsConnected != true;
-        hostBox.Enabled = !connecting && sshClient?.IsConnected != true;
-        portBox.Enabled = !connecting && sshClient?.IsConnected != true;
-        userBox.Enabled = !connecting && sshClient?.IsConnected != true;
-        passwordBox.Enabled = !connecting && sshClient?.IsConnected != true;
-    }
-
-    private static void SetAccountStatus(AccountPanel account, string text, Color color)
-    {
-        account.StatusLabel.Text = text;
-        account.StatusLabel.ForeColor = color;
+        var free = !connecting && sshClient?.IsConnected != true;
+        connectButton.Enabled = free;
+        hostBox.Enabled = free;
+        portBox.Enabled = free;
+        userBox.Enabled = free;
+        passwordBox.Enabled = free;
     }
 
     private static string FindViewer(string configured)
@@ -620,49 +784,190 @@ internal sealed class MainForm : Form
     }
 
     private sealed record RemoteStatus(string Service, string Vnc);
+}
 
-    private sealed class AccountPanel(
-        string id,
-        string title,
-        int localPort,
-        int remotePort,
-        Panel container,
-        Label statusLabel,
-        Button openButton,
-        Button restartButton)
+internal sealed record TargetDef(string Id, string DefaultName, string DefaultNote, int Port);
+
+/// <summary>Eine Account-Kachel mit Name, Notiz, Status und Knöpfen.</summary>
+internal sealed class AccountCard : Panel
+{
+    private readonly Panel accent = new() { Dock = DockStyle.Left, Width = 6, BackColor = Theme.Idle };
+    private readonly Label nameLabel = new();
+    private readonly Label noteLabel = new();
+    private readonly Label statusLabel = new();
+    private readonly Label idLabel = new();
+
+    public TargetDef Target { get; }
+    public AccountLabel Label { get; private set; }
+    public int LocalPort { get; }
+    public FlatButton OpenButton { get; } = new("VNC öffnen", primary: true, width: 124) { Enabled = false };
+    public FlatButton RestartButton { get; } = new("Neu starten", width: 124) { Enabled = false };
+    public FlatButton EditButton { get; } = new("✎", width: 40);
+    public ForwardedPortLocal? Forwarding { get; set; }
+    public bool ServiceActive { get; set; }
+    public int VncFailures { get; set; }
+    public DateTime RepairNotBeforeUtc { get; set; } = DateTime.MinValue;
+    public bool IsOnline { get; private set; }
+
+    public AccountCard(TargetDef target, AccountLabel label, int localPort)
     {
-        public string Id { get; } = id;
-        public string Title { get; } = title;
-        public int LocalPort { get; } = localPort;
-        public int RemotePort { get; } = remotePort;
-        public Panel Container { get; } = container;
-        public Label StatusLabel { get; } = statusLabel;
-        public Button OpenButton { get; } = openButton;
-        public Button RestartButton { get; } = restartButton;
-        public ForwardedPortLocal? Forwarding { get; set; }
+        Target = target;
+        Label = label;
+        LocalPort = localPort;
+        Height = 108;
+        Width = 820;
+        Margin = new Padding(0, 0, 0, 12);
+        BackColor = Theme.Card;
+
+        nameLabel.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
+        nameLabel.ForeColor = Theme.Text;
+        nameLabel.AutoSize = true;
+        nameLabel.Location = new Point(24, 12);
+        noteLabel.ForeColor = Theme.Muted;
+        noteLabel.AutoSize = true;
+        noteLabel.Location = new Point(26, 44);
+        statusLabel.AutoSize = true;
+        statusLabel.Location = new Point(26, 72);
+        statusLabel.Font = new Font("Segoe UI", 10F, FontStyle.Bold);
+        idLabel.ForeColor = Theme.Muted;
+        idLabel.Font = new Font("Segoe UI", 8.5F);
+        idLabel.AutoSize = true;
+        idLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        idLabel.Text = $"{target.Id} · Port {target.Port}";
+        idLabel.Location = new Point(Width - 150, 12);
+
+        var y = 36;
+        EditButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        EditButton.Location = new Point(Width - 40 - 16, y);
+        RestartButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        RestartButton.Location = new Point(EditButton.Left - 8 - 124, y);
+        OpenButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        OpenButton.Location = new Point(RestartButton.Left - 8 - 124, y);
+        EditButton.Font = new Font("Segoe UI Symbol", 11F);
+
+        Controls.AddRange(new Control[] { accent, nameLabel, noteLabel, statusLabel, idLabel, OpenButton, RestartButton, EditButton });
+        // idLabel liegt über den Knöpfen -> in die obere rechte Ecke schieben
+        idLabel.Location = new Point(Width - 16 - idLabel.PreferredWidth, 10);
+
+        SetLabel(label);
+        SetStatus("Nicht verbunden", Theme.Idle);
     }
+
+    public void SetLabel(AccountLabel label)
+    {
+        Label = label;
+        nameLabel.Text = label.Name;
+        noteLabel.Text = string.IsNullOrWhiteSpace(label.Note) ? "Keine Notiz – mit ✎ umbenennen" : label.Note;
+    }
+
+    public void SetConnected(bool connected)
+    {
+        OpenButton.Enabled = connected;
+        RestartButton.Enabled = connected;
+        if (!connected)
+        {
+            ServiceActive = false;
+            VncFailures = 0;
+            RepairNotBeforeUtc = DateTime.MinValue;
+            SetStatus("Nicht verbunden", Theme.Idle);
+        }
+    }
+
+    public void SetStatus(string text, Color color)
+    {
+        statusLabel.Text = "● " + text;
+        statusLabel.ForeColor = color;
+        accent.BackColor = color;
+        IsOnline = color == Theme.Ok;
+    }
+}
+
+/// <summary>Dialog zum Umbenennen eines Accounts.</summary>
+internal sealed class RenameDialog : Form
+{
+    private readonly TextBox nameBox = new() { MaxLength = 40 };
+    private readonly TextBox noteBox = new() { MaxLength = 80 };
+
+    public string NameValue => nameBox.Text;
+    public string NoteValue => noteBox.Text;
+
+    public RenameDialog(string id, string name, string note)
+    {
+        Text = $"Account umbenennen ({id})";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(440, 210);
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
+        Font = new Font("Segoe UI", 10F);
+
+        foreach (var box in new[] { nameBox, noteBox })
+        {
+            box.BackColor = Theme.Input;
+            box.ForeColor = Theme.Text;
+            box.BorderStyle = BorderStyle.FixedSingle;
+        }
+        nameBox.Text = name;
+        noteBox.Text = note;
+
+        Controls.Add(new Label { Text = "Name (z. B. Crafter, Farmer 1)", AutoSize = true, ForeColor = Theme.Muted, Location = new Point(20, 16) });
+        nameBox.SetBounds(20, 40, 400, 28);
+        Controls.Add(nameBox);
+        Controls.Add(new Label { Text = "Notiz (optional, z. B. Aufgabe oder Spielername)", AutoSize = true, ForeColor = Theme.Muted, Location = new Point(20, 82) });
+        noteBox.SetBounds(20, 106, 400, 28);
+        Controls.Add(noteBox);
+
+        var ok = new FlatButton("Speichern", primary: true, width: 120) { DialogResult = DialogResult.OK, Location = new Point(190, 156) };
+        var cancel = new FlatButton("Abbrechen", width: 110) { DialogResult = DialogResult.Cancel, Location = new Point(316, 156) };
+        Controls.Add(ok);
+        Controls.Add(cancel);
+        AcceptButton = ok;
+        CancelButton = cancel;
+    }
+}
+
+internal sealed class AccountLabel
+{
+    public string Name { get; set; } = "";
+    public string Note { get; set; } = "";
 }
 
 internal sealed class AppSettings
 {
-    public string Host { get; set; } = "178.105.144.81";
+    public string Host { get; set; } = "173.249.38.29";
     public int Port { get; set; } = 22;
     public string User { get; set; } = "vncguest";
     public string ViewerPath { get; set; } = "";
-    public string TrustedHostKey { get; set; } = "";
+    public Dictionary<string, string> TrustedHostKeys { get; set; } = new();
+    public Dictionary<string, AccountLabel> Names { get; set; } = new();
 
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MinecraftVncControl",
         "settings.json");
 
+    public AccountLabel LabelFor(TargetDef target) =>
+        Names.TryGetValue(target.Id, out var label) && !string.IsNullOrWhiteSpace(label.Name)
+            ? label
+            : new AccountLabel { Name = target.DefaultName, Note = target.DefaultNote };
+
     public static AppSettings Load()
     {
         try
         {
-            return File.Exists(SettingsPath)
+            var loaded = File.Exists(SettingsPath)
                 ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings()
                 : new AppSettings();
+            loaded.TrustedHostKeys ??= new();
+            loaded.Names ??= new();
+            // Der alte Server wurde abgelöst: gespeicherte alte Adresse automatisch durch die neue ersetzen.
+            if (loaded.Host == "178.105.144.81")
+            {
+                loaded.Host = "173.249.38.29";
+            }
+            return loaded;
         }
         catch
         {
