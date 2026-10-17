@@ -1,0 +1,17 @@
+{
+  "name": "bedrock-afk-bot",
+  "version": "1.0.0",
+  "description": "Bedrock AFK-Bot mit Auto-Relog",
+  "main": "bot.js",
+  "scripts": {
+    "postinstall": "node fix-prebuild.js",
+    "test": "node test/local-test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bedrock-protocol": "^3.59.0"
+  },
+  "private": true
+}

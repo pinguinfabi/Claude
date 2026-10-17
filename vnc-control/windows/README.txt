@@ -51,3 +51,11 @@ Selbst bauen (nur wenn das .NET 9 SDK installiert ist)
 ------------------------------------------------------
   cd MinecraftVncControl
   dotnet publish -c Release -r win-x64 -o ..\release
+
+Version 1.4.0 – Bedrock-Bots
+----------------------------
+- Zusaetzlich zu den sechs Java-Clients zeigt die App fuenf Bedrock-Bots (b1 bis b5)
+  fuer hugosmp.net. Sie haben kein VNC-Fenster; die Kachel zeigt Online / Verbindet /
+  Login noetig. "Neu starten" loest bei einem Bot einen neuen Login (Relog) aus.
+- Einrichtung auf dem Server: server/bedrock-setup.sh ausfuehren, danach pro Bot
+  "bedrock-login b1" (bis b5) und den Xbox-Login im Browser bestaetigen.

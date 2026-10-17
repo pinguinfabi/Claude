@@ -101,7 +101,12 @@ internal sealed class MainForm : Form
         new("afk4", "Account 2", "", 5904),
         new("afk5", "Account 3", "", 5905),
         new("afk6", "Account 4", "", 5906),
-        new("afk7", "Account 5", "", 5907)
+        new("afk7", "Account 5", "", 5907),
+        new("b1", "Bedrock 1", "", 0, true),
+        new("b2", "Bedrock 2", "", 0, true),
+        new("b3", "Bedrock 3", "", 0, true),
+        new("b4", "Bedrock 4", "", 0, true),
+        new("b5", "Bedrock 5", "", 0, true)
     };
 
     private readonly TextBox hostBox = MakeTextBox();
@@ -138,7 +143,7 @@ internal sealed class MainForm : Form
         settings = AppSettings.Load();
         Text = "Minecraft VNC Control";
         MinimumSize = new Size(760, 640);
-        Size = new Size(920, 820);
+        Size = new Size(920, 900);
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10F);
         BackColor = Theme.Bg;
@@ -217,7 +222,7 @@ internal sealed class MainForm : Form
         });
         titleBox.Controls.Add(new Label
         {
-            Text = "AFK-Accounts steuern und anzeigen",
+            Text = "Java-Clients und Bedrock-Bots steuern",
             ForeColor = Theme.Muted,
             AutoSize = true,
             Margin = new Padding(0, 2, 0, 0)
@@ -280,6 +285,14 @@ internal sealed class MainForm : Form
         };
         foreach (var target in Targets)
         {
+            if (target.Id == "afk2")
+            {
+                list.Controls.Add(SectionLabel("JAVA · PRISM-CLIENTS"));
+            }
+            else if (target.Id == "b1")
+            {
+                list.Controls.Add(SectionLabel("BEDROCK · BOTS (hugosmp.net)"));
+            }
             var card = new AccountCard(target, settings.LabelFor(target), 15000 + (target.Port % 100));
             card.OpenButton.Click += (_, _) => OpenViewer(card, silent: false);
             card.RestartButton.Click += async (_, _) => await RestartAsync(card);
@@ -325,6 +338,15 @@ internal sealed class MainForm : Form
 
         Controls.Add(root);
     }
+
+    private static Label SectionLabel(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = Theme.Muted,
+        Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+        Margin = new Padding(2, 6, 0, 8)
+    };
 
     private static void AddField(TableLayoutPanel panel, string label, Control control, int column)
     {
@@ -391,7 +413,7 @@ internal sealed class MainForm : Form
 
             await Task.Run(() => client.Connect());
             sshClient = client;
-            foreach (var account in accounts)
+            foreach (var account in accounts.Where(a => !a.Target.Bedrock))
             {
                 var forwarding = new ForwardedPortLocal(
                     "127.0.0.1",
@@ -486,6 +508,11 @@ internal sealed class MainForm : Form
                 }
 
                 account.ServiceActive = status.Service == "active";
+                if (account.Target.Bedrock)
+                {
+                    ApplyBedrockStatus(account, status);
+                    continue;
+                }
                 switch (status.Service)
                 {
                     case "active" when status.Vnc == "up":
@@ -528,9 +555,43 @@ internal sealed class MainForm : Form
         }
     }
 
+    /// <summary>Bedrock-Bots: Status = systemd-Dienst + Zustandsdatei des Bots (up / login / down).</summary>
+    private static void ApplyBedrockStatus(AccountCard account, RemoteStatus status)
+    {
+        var id = account.Target.Id;
+        if (status.Service == "missing")
+        {
+            account.SetStatus("Nicht eingerichtet", Theme.Bad);
+        }
+        else if (status.Vnc == "login")
+        {
+            account.SetStatus($"Login nötig – auf dem Server: bedrock-login {id}", Theme.Bad);
+        }
+        else if (status.Service == "active" && status.Vnc == "up")
+        {
+            account.SetStatus("Online – im Spiel", Theme.Ok);
+        }
+        else if (status.Service is "active" or "activating")
+        {
+            account.SetStatus("Verbindet / Relog läuft …", Theme.Warn);
+        }
+        else if (status.Service == "inactive")
+        {
+            account.SetStatus("Gestoppt – mit „Neu starten“ starten", Theme.Idle);
+        }
+        else
+        {
+            account.SetStatus($"Bot {status.Service} – Neustart erforderlich", Theme.Bad);
+        }
+    }
+
     /// <summary>Repariert nur die VNC-Brücke eines laufenden Clients; gestoppte Clients werden nie automatisch gestartet.</summary>
     private async Task AutoRepairAsync(AccountCard account, RemoteStatus status)
     {
+        if (account.Target.Bedrock)
+        {
+            return;
+        }
         var needsRepair = status.Service == "active" && status.Vnc != "up";
         if (!needsRepair)
         {
@@ -632,7 +693,7 @@ internal sealed class MainForm : Form
     private void OpenAll()
     {
         var opened = 0;
-        foreach (var account in accounts.Where(a => a.ServiceActive))
+        foreach (var account in accounts.Where(a => a.ServiceActive && !a.Target.Bedrock))
         {
             if (OpenViewer(account, silent: true))
             {
@@ -786,7 +847,7 @@ internal sealed class MainForm : Form
     private sealed record RemoteStatus(string Service, string Vnc);
 }
 
-internal sealed record TargetDef(string Id, string DefaultName, string DefaultNote, int Port);
+internal sealed record TargetDef(string Id, string DefaultName, string DefaultNote, int Port, bool Bedrock = false);
 
 /// <summary>Eine Account-Kachel mit Name, Notiz, Status und Knöpfen.</summary>
 internal sealed class AccountCard : Panel
@@ -833,7 +894,7 @@ internal sealed class AccountCard : Panel
         idLabel.Font = new Font("Segoe UI", 8.5F);
         idLabel.AutoSize = true;
         idLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        idLabel.Text = $"{target.Id} · Port {target.Port}";
+        idLabel.Text = target.Bedrock ? $"{target.Id} · Bot" : $"{target.Id} · Port {target.Port}";
         idLabel.Location = new Point(Width - 150, 12);
 
         var y = 36;
@@ -844,6 +905,7 @@ internal sealed class AccountCard : Panel
         OpenButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         OpenButton.Location = new Point(RestartButton.Left - 8 - 124, y);
         EditButton.Font = new Font("Segoe UI Symbol", 11F);
+        OpenButton.Visible = !target.Bedrock;
 
         Controls.AddRange(new Control[] { accent, nameLabel, noteLabel, statusLabel, idLabel, OpenButton, RestartButton, EditButton });
         // idLabel liegt über den Knöpfen -> in die obere rechte Ecke schieben
@@ -862,7 +924,7 @@ internal sealed class AccountCard : Panel
 
     public void SetConnected(bool connected)
     {
-        OpenButton.Enabled = connected;
+        OpenButton.Enabled = connected && !Target.Bedrock;
         RestartButton.Enabled = connected;
         if (!connected)
         {
