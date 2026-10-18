@@ -158,6 +158,8 @@ RELOG_MINUTES=0
 # Anti-AFK: none oder swing (Arm schwingen alle 25-40 s)
 ANTI_AFK=none
 ENV_EOF
+# Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
+grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
 chown -R "$U:$U" "$DIR"
 runuser -l "$U" -c "cd $DIR && npm install --ignore-scripts --no-audit --no-fund --omit=dev && node fix-prebuild.js"
 runuser -l "$U" -c "cd $DIR && node --check bot.js core.js java.js bedrock.js" && echo "    Bot-Code ok"

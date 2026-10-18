@@ -13,7 +13,8 @@ function run ({ id, type, adapter }) {
   const loginMode = process.argv.includes('--login')
   const HOST = env('BOT_HOST', 'hugosmp.net')
   const PORT = parseInt(env('BOT_PORT', env(type === 'java' ? 'BOT_JAVA_PORT' : 'BOT_BEDROCK_PORT', type === 'java' ? '25565' : '19132')), 10)
-  const VERSION = env('BOT_VERSION', env(type === 'java' ? 'BOT_JAVA_VERSION' : 'BOT_BEDROCK_VERSION', ''))
+  // Java: feste, bewaehrte Version (wie die funktionierenden Prism-Clients); die automatisch erkannte "26.1" bleibt in der Konfigurationsphase haengen
+  const VERSION = env('BOT_VERSION', env(type === 'java' ? 'BOT_JAVA_VERSION' : 'BOT_BEDROCK_VERSION', type === 'java' ? '1.21.8' : ''))
   const RELOG_MINUTES = parseFloat(env('RELOG_MINUTES', '0'))
   const ANTI_AFK = env('ANTI_AFK', 'none') // none | swing
   const OFFLINE = env('BOT_OFFLINE', '0') === '1' // nur fuer Tests
