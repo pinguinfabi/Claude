@@ -579,7 +579,7 @@ internal sealed class MainForm : Form
         }
         else if (status.Service is "active" or "activating")
         {
-            account.SetStatus("Verbindet / Relog läuft …", Theme.Warn);
+            account.SetStatus("Verbindet / Relog läuft – Grund steht im Chat-Fenster", Theme.Warn);
         }
         else if (status.Service == "inactive")
         {

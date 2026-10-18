@@ -18,7 +18,7 @@ server.on('login', client => {
   joins++
   client.write('login', { entityId: client.id, levelType: 'default', gameMode: 0, dimension: 0, difficulty: 2, maxPlayers: 20, reducedDebugInfo: false })
   client.write('position', { x: 0, y: 64, z: 0, yaw: 0, pitch: 0, flags: 0, teleportId: 0 })
-  client.write('update_health', { health: 20, food: 20, foodSaturation: 5 })
+  if (joins > 1) client.write('update_health', { health: 20, food: 20, foodSaturation: 5 }) // 1. Join: kein Spawn-Signal -> Fallback
   setTimeout(() => client.write('chat', { message: JSON.stringify({ text: '<Steve> hallo bot' }), position: 0 }), 2500)
   client.on('chat', p => { serverGot = p.message; console.log('[test] Server erhielt Chat:', p.message) })
   if (joins === 1) setTimeout(() => client.end('Test-Kick (AFK)'), 9000)
@@ -27,7 +27,7 @@ server.on('login', client => {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jbot-'))
 const bot = spawn('node', [path.join(__dirname, '..', 'bot.js'), 'j9'], {
   env: { ...process.env, BOT_HOST: '127.0.0.1', BOT_PORT: String(PORT), BOT_OFFLINE: '1', BOT_DIR: dir, BOT_VERSION: VERSION,
-    BOT_CONTROL_PORT: String(CONTROL), BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
+    BOT_CONTROL_PORT: String(CONTROL), BOT_FALLBACK_MS: '2000', BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 bot.stdout.on('data', d => process.stdout.write('[bot] ' + d))
@@ -56,7 +56,9 @@ setTimeout(() => {
     const sentOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === 'Hallo aus dem Controller')
     const cmdOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === '/home base')
     const relog = joins >= 2
-    console.log(`\n[test] Chat empfangen: ${chatIn}\n[test] Nachricht gesendet+bestaetigt: ${sentOk} (Server: ${serverGot})\n[test] Befehl gesendet: ${cmdOk}\n[test] Relog nach Kick: ${relog} (Joins ${joins})`)
-    process.exit(chatIn && sentOk && cmdOk && relog ? 0 : 1)
+    const notes = lines.some(l => l.t === 'chat' && l.kind === 'system' && /Getrennt|Neuer Versuch/.test(l.msg))
+    const fallback = lines.some(l => l.t === 'chat' && l.kind === 'system' && /kein Spawn-Signal/.test(l.msg))
+    console.log(`\n[test] Chat empfangen: ${chatIn}\n[test] Nachricht gesendet+bestaetigt: ${sentOk} (Server: ${serverGot})\n[test] Befehl gesendet: ${cmdOk}\n[test] Relog nach Kick: ${relog} (Joins ${joins})\n[test] Grund im Chat sichtbar: ${notes}\n[test] Online per Fallback: ${fallback}`)
+    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback ? 0 : 1)
   }, 1500)
 }, 20000)

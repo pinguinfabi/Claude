@@ -186,6 +186,7 @@ function run ({ id, type, adapter }) {
   const SILENCE_MS = parseInt(env('BOT_SILENCE_MS', '90000'), 10)
   const STABLE_MS = parseInt(env('BOT_STABLE_MS', '60000'), 10)
   const CONNECT_MS = parseInt(env('BOT_CONNECT_MS', '75000'), 10)
+  const FALLBACK_MS = parseInt(env('BOT_FALLBACK_MS', '12000'), 10) // Verbindung steht, aber kein Spawn-Signal
 
   fs.mkdirSync(PROFILES, { recursive: true })
   fs.mkdirSync(STATE_DIR, { recursive: true })
@@ -229,13 +230,15 @@ function run ({ id, type, adapter }) {
   const clients = new Set()
   function send (sock, obj) { try { sock.write(JSON.stringify(obj) + '\n') } catch (e) { /* Verbindung weg */ } }
   function broadcast (obj) { for (const s of clients) send(s, obj) }
-  function pushChat (entry) {
+  function pushChat (entry, quiet = false) {
     entry.ts = Date.now()
     history.push(entry)
     if (history.length > 300) history.shift()
     broadcast({ t: 'chat', ...entry })
-    log(entry.kind === 'self' ? '>>' : '<<', entry.from ? `${entry.from}: ${entry.msg}` : entry.msg)
+    if (!quiet) log(entry.kind === 'self' ? '>>' : '<<', entry.from ? `${entry.from}: ${entry.msg}` : entry.msg)
   }
+  // Wichtige Ereignisse (Kick, Relog, Online ...) erscheinen auch im Chat-Fenster der App
+  const note = m => { if (!loginMode) pushChat({ kind: 'system', from: '', msg: '⚙ ' + m }, true) }
   let lastSay = 0
   function handleLine (sock, line) {
     let m
@@ -285,6 +288,7 @@ function run ({ id, type, adapter }) {
   let afkTimer = null
   let stopping = false
   let loginDone = false
+  let joinTimer = null
 
   function connect () {
     clearTimeout(reconnectTimer)
@@ -305,23 +309,21 @@ function run ({ id, type, adapter }) {
         setTimeout(() => shutdown(0), 3000)
       },
       packet: () => { lastPacket = Date.now() },
-      join: () => log('Login ok, Welt wird geladen ...'),
-      spawn: guard(() => {
-        if (state === 'online') return
-        onlineSince = Date.now()
-        setState('online')
-        log('ONLINE – im Spiel gespawnt.')
-        startKeepalive()
-        if (loginMode) {
-          log('Login erfolgreich gespeichert. Beende in 5 s ...')
-          setTimeout(() => shutdown(0), 5000)
-        } else if (RELOG_MINUTES > 0) {
-          const ms = RELOG_MINUTES * 60000 * (0.9 + Math.random() * 0.2)
-          relogTimer = setTimeout(() => drop(mine.conn, `geplanter Relog nach ${Math.round(ms / 60000)} min`, true), ms)
-        }
-      }),
+      join: () => {
+        log('Login ok, Welt wird geladen ...')
+        note('Login ok, Welt wird geladen ...')
+        clearTimeout(joinTimer)
+        joinTimer = setTimeout(() => {
+          if (state !== 'online' && mine.conn && mine.conn === client && !dead) goOnline(mine, 'Verbindung steht (kein Spawn-Signal vom Server)')
+        }, FALLBACK_MS)
+      },
+      spawn: guard(() => goOnline(mine, 'im Spiel gespawnt')),
       chat: e => { if (!loginMode) pushChat(e) },
-      kick: text => log('Vom Server getrennt:', String(text || '').replace(/\n/g, ' ')),
+      kick: text => {
+        const t = String(text || '').replace(/\n/g, ' ')
+        log('Vom Server getrennt:', t)
+        note('Vom Server getrennt: ' + t)
+      },
       closed: reason => drop(mine.conn, reason || 'Verbindung geschlossen')
     }
     try {
@@ -332,6 +334,23 @@ function run ({ id, type, adapter }) {
       return scheduleReconnect('createClient')
     }
     client = mine.conn
+  }
+
+  function goOnline (mine, why) {
+    if (state === 'online' || !mine.conn) return
+    clearTimeout(joinTimer)
+    onlineSince = Date.now()
+    setState('online')
+    log(`ONLINE – ${why}.`)
+    note(`ONLINE – ${why}`)
+    startKeepalive()
+    if (loginMode) {
+      log('Login erfolgreich gespeichert. Beende in 5 s ...')
+      setTimeout(() => shutdown(0), 5000)
+    } else if (RELOG_MINUTES > 0) {
+      const ms = RELOG_MINUTES * 60000 * (0.9 + Math.random() * 0.2)
+      relogTimer = setTimeout(() => drop(mine.conn, `geplanter Relog nach ${Math.round(ms / 60000)} min`, true), ms)
+    }
   }
 
   function onMsaCode (data) {
@@ -375,6 +394,8 @@ function run ({ id, type, adapter }) {
     if (!c || client !== c || dead) return
     dead = true
     log('Getrennt:', reason)
+    note('Getrennt: ' + reason)
+    clearTimeout(joinTimer)
     clearTimeout(relogTimer)
     clearInterval(afkTimer)
     try { c.close() } catch (e) { /* schon zu */ }
@@ -405,6 +426,7 @@ function run ({ id, type, adapter }) {
     const delay = immediate ? 3000 : Math.round(base * (0.8 + Math.random() * 0.4))
     attempt++
     log(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt}).`)
+    note(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt})`)
     reconnectTimer = setTimeout(connect, delay)
   }
 
