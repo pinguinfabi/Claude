@@ -630,8 +630,14 @@ console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}), Anmel
       console.log(`\nERFOLG: Anmeldung ok, Spielername: ${r.profile.name}`)
       if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     } else {
-      await flow.getXboxToken('https://multiplayer.minecraft.net/')
-      console.log('\nERFOLG: Xbox-Anmeldung fuer Bedrock ist ok.')
+      // wie bedrock-protocol: Chain + Multiplayer-Token mit einem frischen Schluessel holen
+      const crypto = require('crypto')
+      const key = crypto.generateKeyPairSync('ec', { namedCurve: 'secp384r1' })
+      const x509 = key.publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
+      const login = await flow.getMinecraftBedrockToken(x509)
+      const payload = JSON.parse(Buffer.from(login.chain[1].split('.')[1], 'base64').toString())
+      console.log(`\nERFOLG: Bedrock-Anmeldung ok, Spielername: ${payload.extraData && payload.extraData.displayName}`)
+      if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     }
     process.exit(0)
   } catch (e) {
@@ -653,7 +659,7 @@ function hint (text) {
     return 'Microsoft hat die Anmeldung dieses Kontos abgelehnt. Haeufige Gruende: (1) Kinder-/Jugendkonto ohne Freigabe in der Microsoft-Familiengruppe, ' +
       '(2) das Konto verlangt eine Sicherheitspruefung (Telefon/E-Mail bestaetigen), (3) beim Anmelden wurde die Frage "Zugriff erlauben?" nicht mit JA bestaetigt, ' +
       '(4) es ist ein Arbeits-/Schulkonto statt eines privaten Microsoft-Kontos. Bitte in einem NEUEN Browserfenster (privat) auf https://account.microsoft.com mit diesem Konto ' +
-      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (nur Java, nutzt den Weg von Prism), sonst java / xboxapp.'
+      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (Weg von Prism; bei Bedrock experimentell), sonst java / xboxapp.'
   }
   if (t.includes('error getting device code')) {
     return 'Microsoft hat keinen Geraete-Code geliefert. Bei Weg "prism" stimmt die App-Kennung (prism-client-id.txt) nicht oder wird nicht akzeptiert; sonst: Internetverbindung des Servers pruefen.'
@@ -719,7 +725,8 @@ const fs = require('fs')
 const path = require('path')
 const { Titles } = require('prismarine-auth')
 
-// "prism": offizieller Geraete-Code-Weg (MSAL) mit der App-Kennung, die Prism Launcher selbst benutzt.
+// "prism": offizieller Geraete-Code-Weg (MSAL) mit der App-Kennung, die Prism Launcher selbst benutzt
+// (fuer Java bewaehrt; fuer Bedrock experimentell).
 // Die Kennung wird aus einem vorhandenen Prism-Konto gelesen (accounts.json: "msa-client-id").
 function prismClientId () {
   if (process.env.BOT_PRISM_CLIENT_ID) return process.env.BOT_PRISM_CLIENT_ID.trim()
@@ -737,7 +744,8 @@ const PRESETS = {
   android: () => ({ authTitle: Titles.MinecraftAndroid, deviceType: 'Android', flow: 'live' }),
   ios: () => ({ authTitle: Titles.MinecraftIOS, deviceType: 'iOS', flow: 'live' }),
   xboxapp: () => ({ authTitle: Titles.XboxAppIOS, deviceType: 'iOS', flow: 'live' }),
-  prism: () => ({ authTitle: prismClientId(), flow: 'msal' }) // nur Java
+  // Bedrock braucht zusaetzlich eine Geraeteangabe (deviceOS); 7 = Windows 10 (per BOT_DEVICE_OS aenderbar)
+  prism: () => ({ authTitle: prismClientId(), flow: 'msal', deviceOS: parseInt(process.env.BOT_DEVICE_OS || '7', 10) })
 }
 
 function preset (name) {
@@ -755,7 +763,6 @@ const { preset } = require('./authopts')
 
 // Bedrock-Adapter (bedrock-protocol)
 exports.connect = function connect (ctx) {
-  if ((process.env.BOT_AUTH || '') === 'prism') throw new Error('Der Anmeldeweg "prism" gibt es nur fuer Java-Bots')
   const opts = {
     host: ctx.host,
     port: ctx.port,
@@ -857,7 +864,7 @@ ANTI_AFK=none
 ENV_EOF
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
-# Prism-App-Kennung fuer den Anmeldeweg "prism" (nur Java) aus einem vorhandenen Prism-Konto lesen
+# Prism-App-Kennung fuer den Anmeldeweg "prism" aus einem vorhandenen Prism-Konto lesen
 if [[ ! -s $DIR/prism-client-id.txt ]]; then
   for f in "$H/afk-client-1/prism-data/accounts.json" "$H/afk-client-2/prism-data/accounts.json"; do
     pid=$(prism_client_id "$f" | head -1)
@@ -900,7 +907,7 @@ atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 # Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
 #   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
 #   switch (Standard) | java | android | ios | xboxapp | prism   - hilft bei Konten, die Microsoft sonst ablehnt
-#   prism = Anmeldeweg wie in Prism Launcher (nur Java-Bots)
+#   prism = Anmeldeweg wie in Prism Launcher (Java bewaehrt, Bedrock experimentell)
 set -Eeuo pipefail
 ID="${1:-}"
 AUTH="${2:-}"

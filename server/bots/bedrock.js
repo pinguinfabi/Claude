@@ -4,7 +4,6 @@ const { preset } = require('./authopts')
 
 // Bedrock-Adapter (bedrock-protocol)
 exports.connect = function connect (ctx) {
-  if ((process.env.BOT_AUTH || '') === 'prism') throw new Error('Der Anmeldeweg "prism" gibt es nur fuer Java-Bots')
   const opts = {
     host: ctx.host,
     port: ctx.port,

@@ -173,7 +173,7 @@ ANTI_AFK=none
 ENV_EOF
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
-# Prism-App-Kennung fuer den Anmeldeweg "prism" (nur Java) aus einem vorhandenen Prism-Konto lesen
+# Prism-App-Kennung fuer den Anmeldeweg "prism" aus einem vorhandenen Prism-Konto lesen
 if [[ ! -s $DIR/prism-client-id.txt ]]; then
   for f in "$H/afk-client-1/prism-data/accounts.json" "$H/afk-client-2/prism-data/accounts.json"; do
     pid=$(prism_client_id "$f" | head -1)
@@ -216,7 +216,7 @@ atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 # Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
 #   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
 #   switch (Standard) | java | android | ios | xboxapp | prism   - hilft bei Konten, die Microsoft sonst ablehnt
-#   prism = Anmeldeweg wie in Prism Launcher (nur Java-Bots)
+#   prism = Anmeldeweg wie in Prism Launcher (Java bewaehrt, Bedrock experimentell)
 set -Eeuo pipefail
 ID="${1:-}"
 AUTH="${2:-}"

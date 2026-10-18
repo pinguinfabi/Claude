@@ -5,7 +5,8 @@ const fs = require('fs')
 const path = require('path')
 const { Titles } = require('prismarine-auth')
 
-// "prism": offizieller Geraete-Code-Weg (MSAL) mit der App-Kennung, die Prism Launcher selbst benutzt.
+// "prism": offizieller Geraete-Code-Weg (MSAL) mit der App-Kennung, die Prism Launcher selbst benutzt
+// (fuer Java bewaehrt; fuer Bedrock experimentell).
 // Die Kennung wird aus einem vorhandenen Prism-Konto gelesen (accounts.json: "msa-client-id").
 function prismClientId () {
   if (process.env.BOT_PRISM_CLIENT_ID) return process.env.BOT_PRISM_CLIENT_ID.trim()
@@ -23,7 +24,8 @@ const PRESETS = {
   android: () => ({ authTitle: Titles.MinecraftAndroid, deviceType: 'Android', flow: 'live' }),
   ios: () => ({ authTitle: Titles.MinecraftIOS, deviceType: 'iOS', flow: 'live' }),
   xboxapp: () => ({ authTitle: Titles.XboxAppIOS, deviceType: 'iOS', flow: 'live' }),
-  prism: () => ({ authTitle: prismClientId(), flow: 'msal' }) // nur Java
+  // Bedrock braucht zusaetzlich eine Geraeteangabe (deviceOS); 7 = Windows 10 (per BOT_DEVICE_OS aenderbar)
+  prism: () => ({ authTitle: prismClientId(), flow: 'msal', deviceOS: parseInt(process.env.BOT_DEVICE_OS || '7', 10) })
 }
 
 function preset (name) {

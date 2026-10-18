@@ -8,7 +8,7 @@ function hint (text) {
     return 'Microsoft hat die Anmeldung dieses Kontos abgelehnt. Haeufige Gruende: (1) Kinder-/Jugendkonto ohne Freigabe in der Microsoft-Familiengruppe, ' +
       '(2) das Konto verlangt eine Sicherheitspruefung (Telefon/E-Mail bestaetigen), (3) beim Anmelden wurde die Frage "Zugriff erlauben?" nicht mit JA bestaetigt, ' +
       '(4) es ist ein Arbeits-/Schulkonto statt eines privaten Microsoft-Kontos. Bitte in einem NEUEN Browserfenster (privat) auf https://account.microsoft.com mit diesem Konto ' +
-      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (nur Java, nutzt den Weg von Prism), sonst java / xboxapp.'
+      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (Weg von Prism; bei Bedrock experimentell), sonst java / xboxapp.'
   }
   if (t.includes('error getting device code')) {
     return 'Microsoft hat keinen Geraete-Code geliefert. Bei Weg "prism" stimmt die App-Kennung (prism-client-id.txt) nicht oder wird nicht akzeptiert; sonst: Internetverbindung des Servers pruefen.'

@@ -73,8 +73,14 @@ console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}), Anmel
       console.log(`\nERFOLG: Anmeldung ok, Spielername: ${r.profile.name}`)
       if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     } else {
-      await flow.getXboxToken('https://multiplayer.minecraft.net/')
-      console.log('\nERFOLG: Xbox-Anmeldung fuer Bedrock ist ok.')
+      // wie bedrock-protocol: Chain + Multiplayer-Token mit einem frischen Schluessel holen
+      const crypto = require('crypto')
+      const key = crypto.generateKeyPairSync('ec', { namedCurve: 'secp384r1' })
+      const x509 = key.publicKey.export({ type: 'spki', format: 'der' }).toString('base64')
+      const login = await flow.getMinecraftBedrockToken(x509)
+      const payload = JSON.parse(Buffer.from(login.chain[1].split('.')[1], 'base64').toString())
+      console.log(`\nERFOLG: Bedrock-Anmeldung ok, Spielername: ${payload.extraData && payload.extraData.displayName}`)
+      if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     }
     process.exit(0)
   } catch (e) {
