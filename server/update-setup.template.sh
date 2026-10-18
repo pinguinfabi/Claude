@@ -191,7 +191,11 @@ U=autosell
 UID_N=$(id -u "$U")
 uctl() { runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user "$@"; }
 uctl stop "bot@$ID.service" 2>/dev/null || true
-runuser -l "$U" -c "set -a; . ~/bedrock-bots/common.env; [ -f ~/bedrock-bots/env/$ID.env ] && . ~/bedrock-bots/env/$ID.env; set +a; cd ~/bedrock-bots && node bot.js $ID --login"
+# uebrig gebliebene Prozesse dieses Bots (z. B. von einem frueheren Strg+C) beenden
+pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
+sleep 1
+# --session-command: Strg+C erreicht den Bot; exec: kein Zwischenprozess
+runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/bedrock-bots/env/$ID.env ] && . ~/bedrock-bots/env/$ID.env; set +a; cd ~/bedrock-bots && exec node bot.js $ID --login"
 uctl enable --now "bot@$ID.service"
 echo "Bot $ID laeuft jetzt (Autostart aktiv)."
 LOGIN_EOF

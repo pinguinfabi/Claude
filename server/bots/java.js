@@ -11,7 +11,7 @@ exports.connect = function connect (ctx) {
     profilesFolder: ctx.profiles,
     onMsaCode: ctx.onMsaCode,
     checkTimeoutInterval: 60000,
-    hideErrors: false
+    hideErrors: true
   }
   if (ctx.version) opts.version = ctx.version
   const bot = mineflayer.createBot(opts)

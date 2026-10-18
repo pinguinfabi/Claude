@@ -31,6 +31,23 @@ function run ({ id, type, adapter }) {
   fs.mkdirSync(STATE_DIR, { recursive: true })
   const log = (...a) => console.log(new Date().toISOString(), `[${id}]`, ...a)
 
+  // Sperre: pro Bot darf nur EIN Prozess laufen (sonst zerstoeren sich zwei Anmeldungen gegenseitig)
+  const lockFile = path.join(STATE_DIR, id + '.lock')
+  try {
+    const other = parseInt(fs.readFileSync(lockFile, 'utf8'), 10)
+    if (other && other !== process.pid) {
+      let alive = false
+      try { process.kill(other, 0); alive = true } catch (e) { /* tot */ }
+      if (alive) {
+        console.error(`Bot ${id} laeuft schon (PID ${other}). Zuerst beenden:  kill ${other}`)
+        process.exit(3)
+      }
+    }
+  } catch (e) { /* keine Sperre vorhanden */ }
+  fs.writeFileSync(lockFile, String(process.pid))
+  const removeLock = () => { try { if (fs.readFileSync(lockFile, 'utf8') === String(process.pid)) fs.unlinkSync(lockFile) } catch (e) { /* egal */ } }
+  process.on('exit', removeLock)
+
   // ---------- Statusdatei ----------
   let state = 'connecting'
   function writeState () {
@@ -181,6 +198,9 @@ function run ({ id, type, adapter }) {
     }, 25000 + Math.floor(Math.random() * 15000))
   }
 
+  const isAuthError = r => /invalid_grant|device_code|authorization code|XSTS|xbl|authenticat/i.test(String(r))
+  let authWipes = 0
+
   function drop (c, reason, immediate = false) {
     if (!c || client !== c || dead) return
     dead = true
@@ -190,6 +210,19 @@ function run ({ id, type, adapter }) {
     try { c.close() } catch (e) { /* schon zu */ }
     client = null
     if (stopping) return
+    if (isAuthError(reason) && !loginDone) {
+      if (loginMode && authWipes < 2) {
+        authWipes++
+        log('Gespeicherte Anmeldedaten sind defekt – loesche sie und frage einen neuen Code an ...')
+        try { fs.rmSync(PROFILES, { recursive: true, force: true }); fs.mkdirSync(PROFILES, { recursive: true }) } catch (e) { /* egal */ }
+        return scheduleReconnect(reason, true)
+      }
+      if (!loginMode) {
+        setState('login')
+        log(`Anmeldung ungueltig/abgelaufen – bitte auf dem Server ausfuehren: bot-login ${id}`)
+        return shutdown(78)
+      }
+    }
     if (onlineSince && Date.now() - onlineSince >= STABLE_MS) attempt = 0
     onlineSince = 0
     scheduleReconnect(reason, immediate)
@@ -226,6 +259,7 @@ function run ({ id, type, adapter }) {
   }
   process.on('SIGTERM', () => shutdown(0))
   process.on('SIGINT', () => shutdown(0))
+  process.on('SIGHUP', () => shutdown(0))
   process.on('uncaughtException', e => { log('Unerwarteter Fehler:', (e && e.stack) || e); if (client) drop(client, 'Ausnahme') })
   process.on('unhandledRejection', e => { log('Unbehandelte Ablehnung:', (e && e.message) || e); if (client) drop(client, 'Ablehnung') })
 
