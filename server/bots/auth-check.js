@@ -3,8 +3,9 @@
 //   node auth-check.js <j1..j5|b1..b5>
 const fs = require('fs')
 const path = require('path')
-const { Authflow, Titles } = require('prismarine-auth')
+const { Authflow } = require('prismarine-auth')
 const { hint, watchAuthErrors } = require('./authhint')
+const { preset } = require('./authopts')
 
 const id = process.argv[2]
 if (!/^[jb][1-9]\d*$/.test(id || '')) {
@@ -16,7 +17,8 @@ const dir = path.join(process.env.BOT_DIR || __dirname, 'profiles', id)
 fs.mkdirSync(dir, { recursive: true })
 
 const errors = []
-const flow = new Authflow(id, dir, { authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }, data => {
+const authName = process.env.BOT_AUTH || 'switch'
+const flow = new Authflow(id, dir, preset(authName), data => {
   console.log('\n==================== MICROSOFT-LOGIN ====================')
   console.log(` 1. Im Browser oeffnen: ${data.verification_uri}`)
   console.log(` 2. Code eingeben:      ${data.user_code}`)
@@ -54,13 +56,14 @@ watchAuthErrors(text => {
   process.exit(1)
 })
 
-console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}) ...`)
+console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}), Anmeldeweg: ${authName} ...`)
 ;(async () => {
   try {
     if (isJava) {
       const r = await flow.getMinecraftJavaToken({ fetchProfile: true })
       if (!r.profile || r.profile.error) throw new Error('Kein Minecraft-Java-Profil – besitzt das Konto Minecraft Java? ' + JSON.stringify(r.profile || {}))
       console.log(`\nERFOLG: Anmeldung ok, Spielername: ${r.profile.name}`)
+      if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     } else {
       await flow.getXboxToken('https://multiplayer.minecraft.net/')
       console.log('\nERFOLG: Xbox-Anmeldung fuer Bedrock ist ok.')

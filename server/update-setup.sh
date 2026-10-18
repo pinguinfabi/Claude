@@ -441,6 +441,7 @@ EOF_CORE_JS
 cat > "$DIR/java.js" <<'EOF_JAVA_JS'
 'use strict'
 const mineflayer = require('mineflayer')
+const { preset } = require('./authopts')
 
 // Java-Adapter (mineflayer): stehen bleiben, Chat lesen und schreiben
 exports.connect = function connect (ctx) {
@@ -451,6 +452,7 @@ exports.connect = function connect (ctx) {
     auth: ctx.offline ? 'offline' : 'microsoft',
     profilesFolder: ctx.profiles,
     onMsaCode: ctx.onMsaCode,
+    ...preset(),
     checkTimeoutInterval: 60000,
     hideErrors: true
   }
@@ -488,8 +490,9 @@ cat > "$DIR/auth-check.js" <<'EOF_AUTH_CHECK_JS'
 //   node auth-check.js <j1..j5|b1..b5>
 const fs = require('fs')
 const path = require('path')
-const { Authflow, Titles } = require('prismarine-auth')
+const { Authflow } = require('prismarine-auth')
 const { hint, watchAuthErrors } = require('./authhint')
+const { preset } = require('./authopts')
 
 const id = process.argv[2]
 if (!/^[jb][1-9]\d*$/.test(id || '')) {
@@ -501,7 +504,8 @@ const dir = path.join(process.env.BOT_DIR || __dirname, 'profiles', id)
 fs.mkdirSync(dir, { recursive: true })
 
 const errors = []
-const flow = new Authflow(id, dir, { authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }, data => {
+const authName = process.env.BOT_AUTH || 'switch'
+const flow = new Authflow(id, dir, preset(authName), data => {
   console.log('\n==================== MICROSOFT-LOGIN ====================')
   console.log(` 1. Im Browser oeffnen: ${data.verification_uri}`)
   console.log(` 2. Code eingeben:      ${data.user_code}`)
@@ -539,13 +543,14 @@ watchAuthErrors(text => {
   process.exit(1)
 })
 
-console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}) ...`)
+console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}), Anmeldeweg: ${authName} ...`)
 ;(async () => {
   try {
     if (isJava) {
       const r = await flow.getMinecraftJavaToken({ fetchProfile: true })
       if (!r.profile || r.profile.error) throw new Error('Kein Minecraft-Java-Profil – besitzt das Konto Minecraft Java? ' + JSON.stringify(r.profile || {}))
       console.log(`\nERFOLG: Anmeldung ok, Spielername: ${r.profile.name}`)
+      if (authName !== 'switch') console.log(`Diesen Weg dauerhaft nutzen:  bot-login ${id} ${authName}`)
     } else {
       await flow.getXboxToken('https://multiplayer.minecraft.net/')
       console.log('\nERFOLG: Xbox-Anmeldung fuer Bedrock ist ok.')
@@ -570,7 +575,7 @@ function hint (text) {
     return 'Microsoft hat die Anmeldung dieses Kontos abgelehnt. Haeufige Gruende: (1) Kinder-/Jugendkonto ohne Freigabe in der Microsoft-Familiengruppe, ' +
       '(2) das Konto verlangt eine Sicherheitspruefung (Telefon/E-Mail bestaetigen), (3) beim Anmelden wurde die Frage "Zugriff erlauben?" nicht mit JA bestaetigt, ' +
       '(4) es ist ein Arbeits-/Schulkonto statt eines privaten Microsoft-Kontos. Bitte in einem NEUEN Browserfenster (privat) auf https://account.microsoft.com mit diesem Konto ' +
-      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen.'
+      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth java" (oder android / ios).'
   }
   if (t.includes('authorization_declined') || t.includes('declined')) {
     return 'Die Anmeldung wurde im Browser abgelehnt/abgebrochen. Beim Anmelden JA/Zulassen waehlen.'
@@ -620,9 +625,32 @@ function watchAuthErrors (onError) {
 
 module.exports = { hint, watchAuthErrors }
 EOF_AUTHHINT_JS
+cat > "$DIR/authopts.js" <<'EOF_AUTHOPTS_JS'
+'use strict'
+// Anmeldewege: manche Konten lehnt Microsoft bei einem Weg ab und akzeptiert sie bei einem anderen
+// (jeder Weg tritt gegenueber Microsoft als andere "App" auf). Auswahl per BOT_AUTH=<name>.
+const { Titles } = require('prismarine-auth')
+
+const PRESETS = {
+  switch: { authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }, // Standard
+  java: { authTitle: Titles.MinecraftJava, deviceType: 'Win32', flow: 'sisu' },
+  android: { authTitle: Titles.MinecraftAndroid, deviceType: 'Android', flow: 'live' },
+  ios: { authTitle: Titles.MinecraftIOS, deviceType: 'iOS', flow: 'live' },
+  xboxapp: { authTitle: Titles.XboxAppIOS, deviceType: 'iOS', flow: 'live' }
+}
+
+function preset (name) {
+  const key = (name || process.env.BOT_AUTH || 'switch').toLowerCase()
+  if (!PRESETS[key]) throw new Error(`Unbekannter Anmeldeweg "${key}" (moeglich: ${Object.keys(PRESETS).join(', ')})`)
+  return { ...PRESETS[key] }
+}
+
+module.exports = { preset, PRESETS }
+EOF_AUTHOPTS_JS
 cat > "$DIR/bedrock.js" <<'EOF_BEDROCK_JS'
 'use strict'
 const bedrock = require('bedrock-protocol')
+const { preset } = require('./authopts')
 
 // Bedrock-Adapter (bedrock-protocol)
 exports.connect = function connect (ctx) {
@@ -634,7 +662,8 @@ exports.connect = function connect (ctx) {
     profilesFolder: ctx.profiles,
     raknetBackend: process.env.BOT_RAKNET || 'raknet-native',
     connectTimeout: 20000,
-    onMsaCode: ctx.onMsaCode
+    onMsaCode: ctx.onMsaCode,
+    ...preset()
   }
   if (ctx.version) opts.version = ctx.version
   const c = bedrock.createClient(opts)
@@ -756,18 +785,27 @@ chown "$U:$U" "$H/.config/systemd/user/bot@.service"
 
 atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 #!/usr/bin/env bash
-# Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1   (j1-j5 Java, b1-b5 Bedrock)
+# Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
+#   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
+#   switch (Standard) | java | android | ios | xboxapp     - hilft bei Konten, die Microsoft sonst ablehnt
 set -Eeuo pipefail
 ID="${1:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1   (j1 bis j5 oder b1 bis b5)" >&2; exit 2; }
+AUTH="${2:-}"
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp]" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
+ENVF="/home/$U/bedrock-bots/env/$ID.env"
 uctl() { runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user "$@"; }
 uctl stop "bot@$ID.service" 2>/dev/null || true
 # uebrig gebliebene Prozesse dieses Bots (z. B. von einem frueheren Strg+C) beenden
 pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
 sleep 1
+if [[ -n $AUTH ]]; then
+  touch "$ENVF"; sed -i '/^BOT_AUTH=/d' "$ENVF"; echo "BOT_AUTH=$AUTH" >> "$ENVF"; chown "$U:$U" "$ENVF"
+  echo "Anmeldeweg fuer $ID: $AUTH"
+fi
 # --session-command: Strg+C erreicht den Bot; exec: kein Zwischenprozess
 runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/bedrock-bots/env/$ID.env ] && . ~/bedrock-bots/env/$ID.env; set +a; cd ~/bedrock-bots && exec node bot.js $ID --login"
 uctl enable --now "bot@$ID.service"
@@ -776,17 +814,24 @@ LOGIN_EOF
 
 atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
 #!/usr/bin/env bash
-# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:  bot-auth-check j2 [--neu]
+# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:
+#   bot-auth-check j2 [--neu] [--auth switch|java|android|ios|xboxapp]
 set -Eeuo pipefail
-ID="${1:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu]   (--neu loescht die gespeicherte Anmeldung dieses Bots)" >&2; exit 2; }
+ID="${1:-}"; shift || true
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu] [--auth java|android|ios|xboxapp]" >&2; exit 2; }
+NEW=0; AUTH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in --neu) NEW=1 ;; --auth) AUTH="${2:-}"; shift ;; *) echo "Unbekannte Option: $1" >&2; exit 2 ;; esac
+  shift
+done
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
 runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user stop "bot@$ID.service" 2>/dev/null || true
 pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
-if [[ "${2:-}" == "--neu" ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
-runuser -l "$U" --session-command "cd ~/bedrock-bots && exec node auth-check.js $ID"
+if [[ $NEW == 1 ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
+runuser -l "$U" --session-command "cd ~/bedrock-bots && BOT_AUTH='${AUTH:-switch}' exec node auth-check.js $ID"
 CHECK_EOF
 
 # ---------- 6. VNC-Steuerung ----------
@@ -1028,6 +1073,7 @@ Naechste Schritte
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
      Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
+       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth java   und bei Erfolg:  bot-login j2 java
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'

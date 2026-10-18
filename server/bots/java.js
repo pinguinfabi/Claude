@@ -1,5 +1,6 @@
 'use strict'
 const mineflayer = require('mineflayer')
+const { preset } = require('./authopts')
 
 // Java-Adapter (mineflayer): stehen bleiben, Chat lesen und schreiben
 exports.connect = function connect (ctx) {
@@ -10,6 +11,7 @@ exports.connect = function connect (ctx) {
     auth: ctx.offline ? 'offline' : 'microsoft',
     profilesFolder: ctx.profiles,
     onMsaCode: ctx.onMsaCode,
+    ...preset(),
     checkTimeoutInterval: 60000,
     hideErrors: true
   }

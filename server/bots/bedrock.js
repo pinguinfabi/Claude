@@ -1,5 +1,6 @@
 'use strict'
 const bedrock = require('bedrock-protocol')
+const { preset } = require('./authopts')
 
 // Bedrock-Adapter (bedrock-protocol)
 exports.connect = function connect (ctx) {
@@ -11,7 +12,8 @@ exports.connect = function connect (ctx) {
     profilesFolder: ctx.profiles,
     raknetBackend: process.env.BOT_RAKNET || 'raknet-native',
     connectTimeout: 20000,
-    onMsaCode: ctx.onMsaCode
+    onMsaCode: ctx.onMsaCode,
+    ...preset()
   }
   if (ctx.version) opts.version = ctx.version
   const c = bedrock.createClient(opts)

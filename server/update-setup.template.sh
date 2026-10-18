@@ -188,18 +188,27 @@ chown "$U:$U" "$H/.config/systemd/user/bot@.service"
 
 atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 #!/usr/bin/env bash
-# Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1   (j1-j5 Java, b1-b5 Bedrock)
+# Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
+#   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
+#   switch (Standard) | java | android | ios | xboxapp     - hilft bei Konten, die Microsoft sonst ablehnt
 set -Eeuo pipefail
 ID="${1:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1   (j1 bis j5 oder b1 bis b5)" >&2; exit 2; }
+AUTH="${2:-}"
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp]" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
+ENVF="/home/$U/bedrock-bots/env/$ID.env"
 uctl() { runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user "$@"; }
 uctl stop "bot@$ID.service" 2>/dev/null || true
 # uebrig gebliebene Prozesse dieses Bots (z. B. von einem frueheren Strg+C) beenden
 pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
 sleep 1
+if [[ -n $AUTH ]]; then
+  touch "$ENVF"; sed -i '/^BOT_AUTH=/d' "$ENVF"; echo "BOT_AUTH=$AUTH" >> "$ENVF"; chown "$U:$U" "$ENVF"
+  echo "Anmeldeweg fuer $ID: $AUTH"
+fi
 # --session-command: Strg+C erreicht den Bot; exec: kein Zwischenprozess
 runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/bedrock-bots/env/$ID.env ] && . ~/bedrock-bots/env/$ID.env; set +a; cd ~/bedrock-bots && exec node bot.js $ID --login"
 uctl enable --now "bot@$ID.service"
@@ -208,17 +217,24 @@ LOGIN_EOF
 
 atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
 #!/usr/bin/env bash
-# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:  bot-auth-check j2 [--neu]
+# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:
+#   bot-auth-check j2 [--neu] [--auth switch|java|android|ios|xboxapp]
 set -Eeuo pipefail
-ID="${1:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu]   (--neu loescht die gespeicherte Anmeldung dieses Bots)" >&2; exit 2; }
+ID="${1:-}"; shift || true
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu] [--auth java|android|ios|xboxapp]" >&2; exit 2; }
+NEW=0; AUTH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in --neu) NEW=1 ;; --auth) AUTH="${2:-}"; shift ;; *) echo "Unbekannte Option: $1" >&2; exit 2 ;; esac
+  shift
+done
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
 runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user stop "bot@$ID.service" 2>/dev/null || true
 pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
-if [[ "${2:-}" == "--neu" ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
-runuser -l "$U" --session-command "cd ~/bedrock-bots && exec node auth-check.js $ID"
+if [[ $NEW == 1 ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
+runuser -l "$U" --session-command "cd ~/bedrock-bots && BOT_AUTH='${AUTH:-switch}' exec node auth-check.js $ID"
 CHECK_EOF
 
 # ---------- 6. VNC-Steuerung ----------
@@ -460,6 +476,7 @@ Naechste Schritte
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
      Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
+       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth java   und bei Erfolg:  bot-login j2 java
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'
