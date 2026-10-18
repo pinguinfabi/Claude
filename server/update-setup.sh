@@ -499,6 +499,22 @@ exports.connect = function connect (ctx) {
   })
   bot.once('inject_allowed', () => ctx.diag && ctx.diag('Erkannte Version: ' + bot.version))
 
+  // Fehler in mineflayer: Die Antwort auf ein Server-Resource-Pack traegt die UUID 000...0 statt der des Packs.
+  // Server mit Pflicht-Pack (z. B. hugosmp.net) warten dann ewig in der Konfigurationsphase.
+  // -> selbst mit der richtigen UUID antworten und die fehlerhafte Standardantwort unterdruecken.
+  const rawWrite = bot._client.write.bind(bot._client)
+  bot._client.write = (name, params, ...rest) => {
+    if (name === 'resource_pack_receive' && params && params.uuid !== undefined && typeof params.uuid !== 'string') return undefined
+    return rawWrite(name, params, ...rest)
+  }
+  bot._client.on('add_resource_pack', data => {
+    try {
+      ctx.diag && ctx.diag(`Resource-Pack angefordert (${data.uuid}) – antworte mit passender UUID`)
+      rawWrite('resource_pack_receive', { uuid: data.uuid, result: 3 }) // angenommen
+      rawWrite('resource_pack_receive', { uuid: data.uuid, result: 0 }) // geladen
+    } catch (e) { ctx.diag && ctx.diag('Resource-Pack-Antwort fehlgeschlagen: ' + e.message) }
+  })
+
   bot._client.on('packet', () => ctx.packet())
   bot._client.on('session', () => ctx.authenticated && ctx.authenticated())
   bot._client.on('login', () => ctx.join())
