@@ -138,6 +138,12 @@ fi
 
 # ---------- 4. Bot-Programm ----------
 echo ">>> 5/8 Bots installieren nach $DIR"
+# alte Bot-Prozesse (Dienste UND uebrig gebliebene bot-login-Laeufe) beenden
+uctl stop 'bot@*.service' 2>/dev/null || true
+pkill -u "$U" -f 'bot\.js [jb][0-9]' 2>/dev/null || true
+sleep 2
+pkill -9 -u "$U" -f 'bot\.js [jb][0-9]' 2>/dev/null || true
+rm -f "$DIR"/state/*.lock 2>/dev/null || true
 install -d -o "$U" -g "$U" "$DIR" "$DIR/env" "$DIR/state" "$DIR/profiles"
 cat > "$DIR/bot.js" <<'EOF_BOT_JS'
 'use strict'
