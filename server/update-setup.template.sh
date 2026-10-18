@@ -169,6 +169,7 @@ atomic_write "$H/.config/systemd/user/bot@.service" 644 <<'UNIT_EOF'
 Description=Chat-Bot %i
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -180,7 +181,6 @@ Restart=always
 RestartSec=10
 # Exit 78 = Microsoft-Login fehlt: nicht in Endlosschleife neu starten
 RestartPreventExitStatus=78
-StartLimitIntervalSec=0
 TimeoutStopSec=15
 
 [Install]

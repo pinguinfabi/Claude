@@ -130,12 +130,14 @@ function run ({ id, type, adapter }) {
   let stopping = false
   let loginDone = false
   let joinTimer = null
+  let lastDiag = ''
 
   function connect () {
     clearTimeout(reconnectTimer)
     setState('connecting')
     dead = false
     lastPacket = connectStart = Date.now()
+    lastDiag = ''
     log(`Verbinde mit ${HOST}:${PORT} (${type}) ...`)
 
     const mine = { conn: null }
@@ -143,6 +145,8 @@ function run ({ id, type, adapter }) {
     const ctx = {
       id, host: HOST, port: PORT, version: VERSION, offline: OFFLINE, profiles: PROFILES, log,
       onMsaCode,
+      // Verbindungsdiagnose: wo haengt der Aufbau? (Journal immer, Chat nur in den ersten Versuchen)
+      diag: m => { lastDiag = m; log('  .', m); if (attempt < 3) note(m) },
       authenticated: () => {
         if (!loginMode || loginDone) return
         loginDone = true
@@ -274,7 +278,7 @@ function run ({ id, type, adapter }) {
   setInterval(() => {
     if (!client || dead) return
     if (state === 'connecting' && !loginMode && Date.now() - connectStart > CONNECT_MS) {
-      drop(client, `Verbindungsaufbau dauert laenger als ${Math.round(CONNECT_MS / 1000)} s`)
+      drop(client, `Verbindungsaufbau dauert laenger als ${Math.round(CONNECT_MS / 1000)} s${lastDiag ? ` (zuletzt: ${lastDiag})` : ''}`)
     } else if (state === 'online' && Date.now() - lastPacket > SILENCE_MS) {
       drop(client, `keine Daten seit ${Math.round(SILENCE_MS / 1000)} s`)
     }

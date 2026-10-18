@@ -291,12 +291,14 @@ function run ({ id, type, adapter }) {
   let stopping = false
   let loginDone = false
   let joinTimer = null
+  let lastDiag = ''
 
   function connect () {
     clearTimeout(reconnectTimer)
     setState('connecting')
     dead = false
     lastPacket = connectStart = Date.now()
+    lastDiag = ''
     log(`Verbinde mit ${HOST}:${PORT} (${type}) ...`)
 
     const mine = { conn: null }
@@ -304,6 +306,8 @@ function run ({ id, type, adapter }) {
     const ctx = {
       id, host: HOST, port: PORT, version: VERSION, offline: OFFLINE, profiles: PROFILES, log,
       onMsaCode,
+      // Verbindungsdiagnose: wo haengt der Aufbau? (Journal immer, Chat nur in den ersten Versuchen)
+      diag: m => { lastDiag = m; log('  .', m); if (attempt < 3) note(m) },
       authenticated: () => {
         if (!loginMode || loginDone) return
         loginDone = true
@@ -435,7 +439,7 @@ function run ({ id, type, adapter }) {
   setInterval(() => {
     if (!client || dead) return
     if (state === 'connecting' && !loginMode && Date.now() - connectStart > CONNECT_MS) {
-      drop(client, `Verbindungsaufbau dauert laenger als ${Math.round(CONNECT_MS / 1000)} s`)
+      drop(client, `Verbindungsaufbau dauert laenger als ${Math.round(CONNECT_MS / 1000)} s${lastDiag ? ` (zuletzt: ${lastDiag})` : ''}`)
     } else if (state === 'online' && Date.now() - lastPacket > SILENCE_MS) {
       drop(client, `keine Daten seit ${Math.round(SILENCE_MS / 1000)} s`)
     }
@@ -483,6 +487,16 @@ exports.connect = function connect (ctx) {
   if (ctx.version) opts.version = ctx.version
   const bot = mineflayer.createBot(opts)
   let ended = false
+
+  // Diagnose: Zustandswechsel und erste Pakete jeder Art melden, damit man sieht, wo ein Aufbau haengt
+  const seen = new Set()
+  bot._client.on('connect', () => ctx.diag && ctx.diag('TCP-Verbindung steht'))
+  bot._client.on('state', (n, o) => ctx.diag && ctx.diag(`Zustand ${o} -> ${n}`))
+  bot._client.on('packet', (data, meta) => {
+    const k = `${meta.state}:${meta.name}`
+    if (!seen.has(k) && seen.size < 40 && ctx.diag) { seen.add(k); ctx.diag('Paket ' + k) }
+  })
+  bot.once('inject_allowed', () => ctx.diag && ctx.diag('Erkannte Version: ' + bot.version))
 
   bot._client.on('packet', () => ctx.packet())
   bot._client.on('session', () => ctx.authenticated && ctx.authenticated())
@@ -788,6 +802,7 @@ atomic_write "$H/.config/systemd/user/bot@.service" 644 <<'UNIT_EOF'
 Description=Chat-Bot %i
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -799,7 +814,6 @@ Restart=always
 RestartSec=10
 # Exit 78 = Microsoft-Login fehlt: nicht in Endlosschleife neu starten
 RestartPreventExitStatus=78
-StartLimitIntervalSec=0
 TimeoutStopSec=15
 
 [Install]

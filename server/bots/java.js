@@ -19,6 +19,16 @@ exports.connect = function connect (ctx) {
   const bot = mineflayer.createBot(opts)
   let ended = false
 
+  // Diagnose: Zustandswechsel und erste Pakete jeder Art melden, damit man sieht, wo ein Aufbau haengt
+  const seen = new Set()
+  bot._client.on('connect', () => ctx.diag && ctx.diag('TCP-Verbindung steht'))
+  bot._client.on('state', (n, o) => ctx.diag && ctx.diag(`Zustand ${o} -> ${n}`))
+  bot._client.on('packet', (data, meta) => {
+    const k = `${meta.state}:${meta.name}`
+    if (!seen.has(k) && seen.size < 40 && ctx.diag) { seen.add(k); ctx.diag('Paket ' + k) }
+  })
+  bot.once('inject_allowed', () => ctx.diag && ctx.diag('Erkannte Version: ' + bot.version))
+
   bot._client.on('packet', () => ctx.packet())
   bot._client.on('session', () => ctx.authenticated && ctx.authenticated())
   bot._client.on('login', () => ctx.join())
