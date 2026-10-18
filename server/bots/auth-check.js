@@ -18,10 +18,18 @@ fs.mkdirSync(dir, { recursive: true })
 
 const errors = []
 const authName = process.env.BOT_AUTH || 'switch'
-const flow = new Authflow(id, dir, preset(authName), data => {
+let authOptions
+try {
+  authOptions = preset(authName)
+} catch (e) {
+  console.error('FEHLER: ' + e.message)
+  process.exit(1)
+}
+const flow = new Authflow(id, dir, authOptions, data => {
+  if (!(data.user_code || data.userCode)) return // kein Code geliefert -> der folgende Fehler wird erklaert
   console.log('\n==================== MICROSOFT-LOGIN ====================')
-  console.log(` 1. Im Browser oeffnen: ${data.verification_uri}`)
-  console.log(` 2. Code eingeben:      ${data.user_code}`)
+  console.log(` 1. Im Browser oeffnen: ${data.verification_uri || data.verificationUri || 'https://www.microsoft.com/link'}`)
+  console.log(` 2. Code eingeben:      ${data.user_code || data.userCode}`)
   console.log(' 3. Mit dem Konto anmelden, das zu diesem Bot gehoert.')
   console.log('==========================================================\n')
 })

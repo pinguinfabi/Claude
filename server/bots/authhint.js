@@ -8,7 +8,13 @@ function hint (text) {
     return 'Microsoft hat die Anmeldung dieses Kontos abgelehnt. Haeufige Gruende: (1) Kinder-/Jugendkonto ohne Freigabe in der Microsoft-Familiengruppe, ' +
       '(2) das Konto verlangt eine Sicherheitspruefung (Telefon/E-Mail bestaetigen), (3) beim Anmelden wurde die Frage "Zugriff erlauben?" nicht mit JA bestaetigt, ' +
       '(4) es ist ein Arbeits-/Schulkonto statt eines privaten Microsoft-Kontos. Bitte in einem NEUEN Browserfenster (privat) auf https://account.microsoft.com mit diesem Konto ' +
-      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth java" (oder android / ios).'
+      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (nur Java, nutzt den Weg von Prism), sonst java / xboxapp.'
+  }
+  if (t.includes('error getting device code')) {
+    return 'Microsoft hat keinen Geraete-Code geliefert. Bei Weg "prism" stimmt die App-Kennung (prism-client-id.txt) nicht oder wird nicht akzeptiert; sonst: Internetverbindung des Servers pruefen.'
+  }
+  if (t.includes('aadsts700016') || t.includes('unauthorized_client') || t.includes('invalid_client')) {
+    return 'Die App-Kennung (Client-ID) wird von Microsoft nicht akzeptiert. Bei Weg "prism": prism-client-id.txt pruefen.'
   }
   if (t.includes('authorization_declined') || t.includes('declined')) {
     return 'Die Anmeldung wurde im Browser abgelehnt/abgebrochen. Beim Anmelden JA/Zulassen waehlen.'
@@ -37,22 +43,24 @@ function hint (text) {
   return 'Unbekannter Anmeldefehler – den Text oben bitte weitergeben.'
 }
 
-const AUTH_RE = /Failed to acquire authorization code|invalid_grant|Authentication failed|Xbox Live authentication failed/i
+const AUTH_RE = /Failed to acquire authorization code|invalid_grant|Authentication failed|Xbox Live authentication failed|Error getting device code|AADSTS|unauthorized_client|invalid_client|interaction_required|ClientAuthError/i
 
 // Ruft onError genau EINMAL beim ersten Anmeldefehler auf, alles andere geht normal an console.debug.
 function watchAuthErrors (onError) {
-  const original = console.debug.bind(console)
   let fired = false
-  console.debug = (...args) => {
-    const text = args.map(a => (a && a.message) ? a.message : String(a)).join(' ')
-    if (AUTH_RE.test(text)) {
-      if (!fired) {
-        fired = true
-        try { onError(text) } catch (e) { /* egal */ }
+  for (const method of ['debug', 'warn']) {
+    const original = console[method].bind(console)
+    console[method] = (...args) => {
+      const text = args.map(a => (a && a.message) ? a.message : String(a)).join(' ')
+      if (AUTH_RE.test(text)) {
+        if (!fired) {
+          fired = true
+          try { onError(text) } catch (e) { /* egal */ }
+        }
+        return
       }
-      return
+      original(...args)
     }
-    original(...args)
   }
 }
 

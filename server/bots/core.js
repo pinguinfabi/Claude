@@ -200,11 +200,13 @@ function run ({ id, type, adapter }) {
   }
 
   function onMsaCode (data) {
-    const url = data.verification_uri || 'https://www.microsoft.com/link'
+    const url = data.verification_uri || data.verificationUri || 'https://www.microsoft.com/link'
+    const userCode = data.user_code || data.userCode
+    if (!userCode) return // Microsoft hat keinen Code geliefert -> der folgende Anmeldefehler wird erklaert
     if (loginMode) {
       console.log('\n==================== MICROSOFT-LOGIN ====================')
       console.log(` 1. Auf deinem PC im Browser oeffnen: ${url}`)
-      console.log(` 2. Diesen Code eingeben:  ${data.user_code}`)
+      console.log(` 2. Diesen Code eingeben:  ${userCode}`)
       console.log(' 3. Mit dem Minecraft-Konto fuer diesen Bot anmelden.')
       console.log('==========================================================\n')
     } else {

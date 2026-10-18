@@ -29,6 +29,19 @@ uctl() {
 }
 atomic_write() { local tmp; tmp=$(mktemp "$1.XXXX"); cat > "$tmp"; chmod "$2" "$tmp"; mv -f "$tmp" "$1"; }
 setkv() { if grep -q "^$2=" "$1"; then sed -i "s|^$2=.*|$2=$3|" "$1"; else echo "$2=$3" >> "$1"; fi; }
+prism_client_id() { # accounts.json -> msa-client-id des ersten Prism-Kontos
+  python3 - "$1" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    for a in json.load(open(sys.argv[1])).get("accounts", []):
+        c = a.get("msa-client-id")
+        if c:
+            print(c)
+            break
+except Exception:
+    pass
+PY
+}
 account_names() { # accounts.json -> Spielernamen
   python3 - "$1" <<'PY' 2>/dev/null || true
 import json, sys
@@ -160,6 +173,14 @@ ANTI_AFK=none
 ENV_EOF
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
+# Prism-App-Kennung fuer den Anmeldeweg "prism" (nur Java) aus einem vorhandenen Prism-Konto lesen
+if [[ ! -s $DIR/prism-client-id.txt ]]; then
+  for f in "$H/afk-client-1/prism-data/accounts.json" "$H/afk-client-2/prism-data/accounts.json"; do
+    pid=$(prism_client_id "$f" | head -1)
+    if [[ -n ${pid:-} ]]; then echo "$pid" > "$DIR/prism-client-id.txt"; echo "    Prism-Client-ID gefunden ($f)"; break; fi
+  done
+  [[ -s $DIR/prism-client-id.txt ]] || echo "    Hinweis: keine Prism-Client-ID gefunden - Anmeldeweg 'prism' ist nicht verfuegbar"
+fi
 chown -R "$U:$U" "$DIR"
 runuser -l "$U" -c "cd $DIR && npm install --ignore-scripts --no-audit --no-fund --omit=dev && node fix-prebuild.js"
 runuser -l "$U" -c "cd $DIR && node --check bot.js core.js java.js bedrock.js" && echo "    Bot-Code ok"
@@ -194,12 +215,13 @@ atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 #!/usr/bin/env bash
 # Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
 #   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
-#   switch (Standard) | java | android | ios | xboxapp     - hilft bei Konten, die Microsoft sonst ablehnt
+#   switch (Standard) | java | android | ios | xboxapp | prism   - hilft bei Konten, die Microsoft sonst ablehnt
+#   prism = Anmeldeweg wie in Prism Launcher (nur Java-Bots)
 set -Eeuo pipefail
 ID="${1:-}"
 AUTH="${2:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp]" >&2; exit 2; }
-[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp|prism]" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp|prism)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
@@ -231,7 +253,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in --neu) NEW=1 ;; --auth) AUTH="${2:-}"; shift ;; *) echo "Unbekannte Option: $1" >&2; exit 2 ;; esac
   shift
 done
-[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp|prism)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
@@ -481,7 +503,7 @@ Naechste Schritte
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
      Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
-       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth java   und bei Erfolg:  bot-login j2 java
+       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth prism   und bei Erfolg:  bot-login j2 prism
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'

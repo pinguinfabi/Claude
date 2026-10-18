@@ -29,6 +29,19 @@ uctl() {
 }
 atomic_write() { local tmp; tmp=$(mktemp "$1.XXXX"); cat > "$tmp"; chmod "$2" "$tmp"; mv -f "$tmp" "$1"; }
 setkv() { if grep -q "^$2=" "$1"; then sed -i "s|^$2=.*|$2=$3|" "$1"; else echo "$2=$3" >> "$1"; fi; }
+prism_client_id() { # accounts.json -> msa-client-id des ersten Prism-Kontos
+  python3 - "$1" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    for a in json.load(open(sys.argv[1])).get("accounts", []):
+        c = a.get("msa-client-id")
+        if c:
+            print(c)
+            break
+except Exception:
+    pass
+PY
+}
 account_names() { # accounts.json -> Spielernamen
   python3 - "$1" <<'PY' 2>/dev/null || true
 import json, sys
@@ -361,11 +374,13 @@ function run ({ id, type, adapter }) {
   }
 
   function onMsaCode (data) {
-    const url = data.verification_uri || 'https://www.microsoft.com/link'
+    const url = data.verification_uri || data.verificationUri || 'https://www.microsoft.com/link'
+    const userCode = data.user_code || data.userCode
+    if (!userCode) return // Microsoft hat keinen Code geliefert -> der folgende Anmeldefehler wird erklaert
     if (loginMode) {
       console.log('\n==================== MICROSOFT-LOGIN ====================')
       console.log(` 1. Auf deinem PC im Browser oeffnen: ${url}`)
-      console.log(` 2. Diesen Code eingeben:  ${data.user_code}`)
+      console.log(` 2. Diesen Code eingeben:  ${userCode}`)
       console.log(' 3. Mit dem Minecraft-Konto fuer diesen Bot anmelden.')
       console.log('==========================================================\n')
     } else {
@@ -560,10 +575,18 @@ fs.mkdirSync(dir, { recursive: true })
 
 const errors = []
 const authName = process.env.BOT_AUTH || 'switch'
-const flow = new Authflow(id, dir, preset(authName), data => {
+let authOptions
+try {
+  authOptions = preset(authName)
+} catch (e) {
+  console.error('FEHLER: ' + e.message)
+  process.exit(1)
+}
+const flow = new Authflow(id, dir, authOptions, data => {
+  if (!(data.user_code || data.userCode)) return // kein Code geliefert -> der folgende Fehler wird erklaert
   console.log('\n==================== MICROSOFT-LOGIN ====================')
-  console.log(` 1. Im Browser oeffnen: ${data.verification_uri}`)
-  console.log(` 2. Code eingeben:      ${data.user_code}`)
+  console.log(` 1. Im Browser oeffnen: ${data.verification_uri || data.verificationUri || 'https://www.microsoft.com/link'}`)
+  console.log(` 2. Code eingeben:      ${data.user_code || data.userCode}`)
   console.log(' 3. Mit dem Konto anmelden, das zu diesem Bot gehoert.')
   console.log('==========================================================\n')
 })
@@ -630,7 +653,13 @@ function hint (text) {
     return 'Microsoft hat die Anmeldung dieses Kontos abgelehnt. Haeufige Gruende: (1) Kinder-/Jugendkonto ohne Freigabe in der Microsoft-Familiengruppe, ' +
       '(2) das Konto verlangt eine Sicherheitspruefung (Telefon/E-Mail bestaetigen), (3) beim Anmelden wurde die Frage "Zugriff erlauben?" nicht mit JA bestaetigt, ' +
       '(4) es ist ein Arbeits-/Schulkonto statt eines privaten Microsoft-Kontos. Bitte in einem NEUEN Browserfenster (privat) auf https://account.microsoft.com mit diesem Konto ' +
-      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth java" (oder android / ios).'
+      'anmelden, alle Aufforderungen erledigen, dann auf https://www.minecraft.net/login und https://www.xbox.com anmelden und danach "bot-auth-check <bot> --neu" wiederholen. Hilft das nicht: anderen Anmeldeweg testen: "bot-auth-check <bot> --neu --auth prism" (nur Java, nutzt den Weg von Prism), sonst java / xboxapp.'
+  }
+  if (t.includes('error getting device code')) {
+    return 'Microsoft hat keinen Geraete-Code geliefert. Bei Weg "prism" stimmt die App-Kennung (prism-client-id.txt) nicht oder wird nicht akzeptiert; sonst: Internetverbindung des Servers pruefen.'
+  }
+  if (t.includes('aadsts700016') || t.includes('unauthorized_client') || t.includes('invalid_client')) {
+    return 'Die App-Kennung (Client-ID) wird von Microsoft nicht akzeptiert. Bei Weg "prism": prism-client-id.txt pruefen.'
   }
   if (t.includes('authorization_declined') || t.includes('declined')) {
     return 'Die Anmeldung wurde im Browser abgelehnt/abgebrochen. Beim Anmelden JA/Zulassen waehlen.'
@@ -659,22 +688,24 @@ function hint (text) {
   return 'Unbekannter Anmeldefehler – den Text oben bitte weitergeben.'
 }
 
-const AUTH_RE = /Failed to acquire authorization code|invalid_grant|Authentication failed|Xbox Live authentication failed/i
+const AUTH_RE = /Failed to acquire authorization code|invalid_grant|Authentication failed|Xbox Live authentication failed|Error getting device code|AADSTS|unauthorized_client|invalid_client|interaction_required|ClientAuthError/i
 
 // Ruft onError genau EINMAL beim ersten Anmeldefehler auf, alles andere geht normal an console.debug.
 function watchAuthErrors (onError) {
-  const original = console.debug.bind(console)
   let fired = false
-  console.debug = (...args) => {
-    const text = args.map(a => (a && a.message) ? a.message : String(a)).join(' ')
-    if (AUTH_RE.test(text)) {
-      if (!fired) {
-        fired = true
-        try { onError(text) } catch (e) { /* egal */ }
+  for (const method of ['debug', 'warn']) {
+    const original = console[method].bind(console)
+    console[method] = (...args) => {
+      const text = args.map(a => (a && a.message) ? a.message : String(a)).join(' ')
+      if (AUTH_RE.test(text)) {
+        if (!fired) {
+          fired = true
+          try { onError(text) } catch (e) { /* egal */ }
+        }
+        return
       }
-      return
+      original(...args)
     }
-    original(...args)
   }
 }
 
@@ -684,20 +715,35 @@ cat > "$DIR/authopts.js" <<'EOF_AUTHOPTS_JS'
 'use strict'
 // Anmeldewege: manche Konten lehnt Microsoft bei einem Weg ab und akzeptiert sie bei einem anderen
 // (jeder Weg tritt gegenueber Microsoft als andere "App" auf). Auswahl per BOT_AUTH=<name>.
+const fs = require('fs')
+const path = require('path')
 const { Titles } = require('prismarine-auth')
 
+// "prism": offizieller Geraete-Code-Weg (MSAL) mit der App-Kennung, die Prism Launcher selbst benutzt.
+// Die Kennung wird aus einem vorhandenen Prism-Konto gelesen (accounts.json: "msa-client-id").
+function prismClientId () {
+  if (process.env.BOT_PRISM_CLIENT_ID) return process.env.BOT_PRISM_CLIENT_ID.trim()
+  const file = path.join(process.env.BOT_DIR || __dirname, 'prism-client-id.txt')
+  try {
+    const id = fs.readFileSync(file, 'utf8').trim()
+    if (id) return id
+  } catch (e) { /* unten melden */ }
+  throw new Error('Prism-Client-ID fehlt (Datei prism-client-id.txt). update-setup.sh ausfuehren – es liest sie aus einem vorhandenen Prism-Konto.')
+}
+
 const PRESETS = {
-  switch: { authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }, // Standard
-  java: { authTitle: Titles.MinecraftJava, deviceType: 'Win32', flow: 'sisu' },
-  android: { authTitle: Titles.MinecraftAndroid, deviceType: 'Android', flow: 'live' },
-  ios: { authTitle: Titles.MinecraftIOS, deviceType: 'iOS', flow: 'live' },
-  xboxapp: { authTitle: Titles.XboxAppIOS, deviceType: 'iOS', flow: 'live' }
+  switch: () => ({ authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }), // Standard
+  java: () => ({ authTitle: Titles.MinecraftJava, deviceType: 'Win32', flow: 'sisu' }),
+  android: () => ({ authTitle: Titles.MinecraftAndroid, deviceType: 'Android', flow: 'live' }),
+  ios: () => ({ authTitle: Titles.MinecraftIOS, deviceType: 'iOS', flow: 'live' }),
+  xboxapp: () => ({ authTitle: Titles.XboxAppIOS, deviceType: 'iOS', flow: 'live' }),
+  prism: () => ({ authTitle: prismClientId(), flow: 'msal' }) // nur Java
 }
 
 function preset (name) {
   const key = (name || process.env.BOT_AUTH || 'switch').toLowerCase()
   if (!PRESETS[key]) throw new Error(`Unbekannter Anmeldeweg "${key}" (moeglich: ${Object.keys(PRESETS).join(', ')})`)
-  return { ...PRESETS[key] }
+  return PRESETS[key]()
 }
 
 module.exports = { preset, PRESETS }
@@ -709,6 +755,7 @@ const { preset } = require('./authopts')
 
 // Bedrock-Adapter (bedrock-protocol)
 exports.connect = function connect (ctx) {
+  if ((process.env.BOT_AUTH || '') === 'prism') throw new Error('Der Anmeldeweg "prism" gibt es nur fuer Java-Bots')
   const opts = {
     host: ctx.host,
     port: ctx.port,
@@ -810,6 +857,14 @@ ANTI_AFK=none
 ENV_EOF
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
+# Prism-App-Kennung fuer den Anmeldeweg "prism" (nur Java) aus einem vorhandenen Prism-Konto lesen
+if [[ ! -s $DIR/prism-client-id.txt ]]; then
+  for f in "$H/afk-client-1/prism-data/accounts.json" "$H/afk-client-2/prism-data/accounts.json"; do
+    pid=$(prism_client_id "$f" | head -1)
+    if [[ -n ${pid:-} ]]; then echo "$pid" > "$DIR/prism-client-id.txt"; echo "    Prism-Client-ID gefunden ($f)"; break; fi
+  done
+  [[ -s $DIR/prism-client-id.txt ]] || echo "    Hinweis: keine Prism-Client-ID gefunden - Anmeldeweg 'prism' ist nicht verfuegbar"
+fi
 chown -R "$U:$U" "$DIR"
 runuser -l "$U" -c "cd $DIR && npm install --ignore-scripts --no-audit --no-fund --omit=dev && node fix-prebuild.js"
 runuser -l "$U" -c "cd $DIR && node --check bot.js core.js java.js bedrock.js" && echo "    Bot-Code ok"
@@ -844,12 +899,13 @@ atomic_write /usr/local/bin/bot-login 755 <<'LOGIN_EOF'
 #!/usr/bin/env bash
 # Einmaliger Microsoft-Login fuer einen Chat-Bot:  bot-login j1 [Anmeldeweg]
 #   j1-j5 = Java, b1-b5 = Bedrock.  Anmeldeweg (optional, wird fuer diesen Bot gespeichert):
-#   switch (Standard) | java | android | ios | xboxapp     - hilft bei Konten, die Microsoft sonst ablehnt
+#   switch (Standard) | java | android | ios | xboxapp | prism   - hilft bei Konten, die Microsoft sonst ablehnt
+#   prism = Anmeldeweg wie in Prism Launcher (nur Java-Bots)
 set -Eeuo pipefail
 ID="${1:-}"
 AUTH="${2:-}"
-[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp]" >&2; exit 2; }
-[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-login j1 [switch|java|android|ios|xboxapp|prism]" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp|prism)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
@@ -881,7 +937,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in --neu) NEW=1 ;; --auth) AUTH="${2:-}"; shift ;; *) echo "Unbekannte Option: $1" >&2; exit 2 ;; esac
   shift
 done
-[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
+[[ -z $AUTH || $AUTH =~ ^(switch|java|android|ios|xboxapp|prism)$ ]] || { echo "Unbekannter Anmeldeweg: $AUTH" >&2; exit 2; }
 [[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
 U=autosell
 UID_N=$(id -u "$U")
@@ -1131,7 +1187,7 @@ Naechste Schritte
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
      Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
-       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth java   und bei Erfolg:  bot-login j2 java
+       dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth prism   und bei Erfolg:  bot-login j2 prism
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'
