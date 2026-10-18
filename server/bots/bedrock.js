@@ -17,6 +17,7 @@ exports.connect = function connect (ctx) {
   const c = bedrock.createClient(opts)
 
   c.on('packet', () => ctx.packet())
+  c.on('session', () => ctx.authenticated && ctx.authenticated())
   c.on('join', () => ctx.join())
   c.on('spawn', () => ctx.spawn())
   c.on('kick', p => ctx.kick(p && (p.message || p.reason)))

@@ -18,6 +18,7 @@ exports.connect = function connect (ctx) {
   let ended = false
 
   bot._client.on('packet', () => ctx.packet())
+  bot._client.on('session', () => ctx.authenticated && ctx.authenticated())
   bot._client.on('login', () => ctx.join())
   bot.once('spawn', () => ctx.spawn())
   bot.on('messagestr', (msg, position, json) => {

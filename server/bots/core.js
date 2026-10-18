@@ -107,6 +107,7 @@ function run ({ id, type, adapter }) {
   let relogTimer = null
   let afkTimer = null
   let stopping = false
+  let loginDone = false
 
   function connect () {
     clearTimeout(reconnectTimer)
@@ -120,6 +121,12 @@ function run ({ id, type, adapter }) {
     const ctx = {
       id, host: HOST, port: PORT, version: VERSION, offline: OFFLINE, profiles: PROFILES, log,
       onMsaCode,
+      authenticated: () => {
+        if (!loginMode || loginDone) return
+        loginDone = true
+        log('Microsoft-Login erfolgreich und gespeichert. Beende in 3 s ...')
+        setTimeout(() => shutdown(0), 3000)
+      },
       packet: () => { lastPacket = Date.now() },
       join: () => log('Login ok, Welt wird geladen ...'),
       spawn: guard(() => {
@@ -190,7 +197,7 @@ function run ({ id, type, adapter }) {
 
   function scheduleReconnect (reason, immediate = false) {
     setState('connecting')
-    if (loginMode && attempt >= 3) { log('Login nicht moeglich (Server nicht erreichbar?).'); return shutdown(1) }
+    if (loginMode && !loginDone && attempt >= 3) { log('Login nicht moeglich (Server nicht erreichbar?).'); return shutdown(1) }
     const base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS)
     const delay = immediate ? 3000 : Math.round(base * (0.8 + Math.random() * 0.4))
     attempt++
