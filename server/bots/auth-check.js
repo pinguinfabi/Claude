@@ -4,6 +4,7 @@
 const fs = require('fs')
 const path = require('path')
 const { Authflow, Titles } = require('prismarine-auth')
+const { hint, watchAuthErrors } = require('./authhint')
 
 const id = process.argv[2]
 if (!/^[jb][1-9]\d*$/.test(id || '')) {
@@ -47,28 +48,11 @@ if (isJava) {
   spy(flow.mca, 'fetchProfile', 'Minecraft-Java-Profil')
 }
 
-function hint (text) {
-  const t = text.toLowerCase()
-  if (t.includes('2148916233') || t.includes('does not have an xbox') || t.includes('create') && t.includes('xbox')) {
-    return 'Das Microsoft-Konto hat KEIN Xbox-Profil. Einmal auf https://www.xbox.com anmelden und einen Gamertag anlegen, danach hier neu versuchen.'
-  }
-  if (t.includes('2148916238') || t.includes('under 18') || t.includes('child')) {
-    return 'Kinder-Konto: Es muss in einer Microsoft-Familiengruppe von einem Erwachsenen freigegeben werden (account.microsoft.com/family).'
-  }
-  if (t.includes('2148916235') || t.includes('banned') || t.includes('country')) {
-    return 'Xbox Live ist fuer die Region dieses Kontos gesperrt oder das Konto ist gesperrt.'
-  }
-  if (t.includes('2148916236') || t.includes('2148916237') || t.includes('adult')) {
-    return 'Das Konto braucht eine Alters-/Erwachsenen-Verifizierung bei Xbox.'
-  }
-  if (t.includes('not found') || t.includes('profile') || t.includes('own minecraft')) {
-    return 'Das Konto besitzt Minecraft: Java Edition nicht (oder hat noch keinen Profilnamen). Mit dem Launcher einmal pruefen: minecraft.net/profile.'
-  }
-  if (t.includes('invalid_grant') || t.includes('device_code')) {
-    return 'Der Geraete-Code wurde nicht rechtzeitig/richtig bestaetigt. Mit  --neu  noch einmal starten und den Code SOFORT eingeben.'
-  }
-  return 'Unbekannter Fehler – den obigen Text bitte weitergeben.'
-}
+watchAuthErrors(text => {
+  console.log(`\nURSACHE (erster Fehler, Schritt "Microsoft-Anmeldung"):\n  ${text.split('\n').join('\n  ')}`)
+  console.log(`\nHINWEIS: ${hint(text)}`)
+  process.exit(1)
+})
 
 console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}) ...`)
 ;(async () => {

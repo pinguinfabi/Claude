@@ -5,6 +5,7 @@
 const fs = require('fs')
 const path = require('path')
 const net = require('net')
+const { hint, watchAuthErrors } = require('./authhint')
 
 const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? process.env[k] : d)
 
@@ -197,6 +198,16 @@ function run ({ id, type, adapter }) {
       try { if (client === c && state === 'online') c.keepalive() } catch (e) { log('Anti-AFK fehlgeschlagen:', e.message) }
     }, 25000 + Math.floor(Math.random() * 15000))
   }
+
+  watchAuthErrors(text => {
+    if (loginDone) return
+    log('Microsoft/Xbox hat die Anmeldung abgelehnt:', text.split('\n')[0])
+    log('HINWEIS:', hint(text))
+    if (loginMode) return shutdown(1)
+    setState('login')
+    log(`Anmeldung ungueltig/abgelehnt – bitte auf dem Server ausfuehren: bot-login ${id}  (Diagnose: bot-auth-check ${id} --neu)`)
+    shutdown(78)
+  })
 
   const isAuthError = r => /invalid_grant|device_code|authorization code|XSTS|xbl|authenticat/i.test(String(r))
   let authWipes = 0

@@ -10,7 +10,7 @@ pkg = {'name': pkg['name'], 'version': pkg['version'], 'description': pkg['descr
        'private': True, 'scripts': {'postinstall': 'node fix-prebuild.js'}, 'license': pkg.get('license', 'UNLICENSED'),
        'dependencies': deps}
 files = {'bot.js': (bots / 'bot.js').read_text(), 'core.js': (bots / 'core.js').read_text(),
-         'java.js': (bots / 'java.js').read_text(), 'auth-check.js': (bots / 'auth-check.js').read_text(), 'bedrock.js': (bots / 'bedrock.js').read_text(),
+         'java.js': (bots / 'java.js').read_text(), 'auth-check.js': (bots / 'auth-check.js').read_text(), 'authhint.js': (bots / 'authhint.js').read_text(), 'bedrock.js': (bots / 'bedrock.js').read_text(),
          'fix-prebuild.js': (bots / 'fix-prebuild.js').read_text(), 'package.json': json.dumps(pkg, indent=2) + '\n'}
 blocks = []
 for name, text in files.items():
