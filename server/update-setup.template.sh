@@ -138,6 +138,8 @@ fi
 
 # ---------- 4. Bot-Programm ----------
 echo ">>> 5/8 Bots installieren nach $DIR"
+# merken, welche Bots gerade laufen (werden nach dem Update wieder gestartet)
+RUNNING_BOTS=$(uctl list-units 'bot@*.service' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}' || true)
 # alte Bot-Prozesse (Dienste UND uebrig gebliebene bot-login-Laeufe) beenden
 uctl stop 'bot@*.service' 2>/dev/null || true
 pkill -u "$U" -f 'bot\.js [jb][0-9]' 2>/dev/null || true
@@ -458,6 +460,7 @@ loginctl enable-linger "$U"
 uctl daemon-reload
 uctl enable --now minecraft-afk1.service                       # laeuft mit dem bisherigen afk3-Konto weiter
 uctl enable minecraft-afk2.service                             # neu: erst nach dem Konto-Login starten
+for svc in ${RUNNING_BOTS:-}; do uctl start "$svc" && echo "    Bot $svc wieder gestartet"; done
 for t in $PRISM; do uctl enable --now "minecraft-vnc-bridge@$t.service"; done
 if [[ -z $(swapon --show --noheadings) ]]; then
   fallocate -l 8G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
