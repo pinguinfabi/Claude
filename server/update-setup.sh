@@ -471,6 +471,99 @@ exports.connect = function connect (ctx) {
   }
 }
 EOF_JAVA_JS
+cat > "$DIR/auth-check.js" <<'EOF_AUTH_CHECK_JS'
+'use strict'
+// Diagnose: findet heraus, bei welchem Schritt die Microsoft-/Xbox-Anmeldung eines Kontos scheitert.
+//   node auth-check.js <j1..j5|b1..b5>
+const fs = require('fs')
+const path = require('path')
+const { Authflow, Titles } = require('prismarine-auth')
+
+const id = process.argv[2]
+if (!/^[jb][1-9]\d*$/.test(id || '')) {
+  console.error('Aufruf: node auth-check.js <j1..j5 | b1..b5>')
+  process.exit(2)
+}
+const isJava = id[0] === 'j'
+const dir = path.join(process.env.BOT_DIR || __dirname, 'profiles', id)
+fs.mkdirSync(dir, { recursive: true })
+
+const errors = []
+const flow = new Authflow(id, dir, { authTitle: Titles.MinecraftNintendoSwitch, deviceType: 'Nintendo', flow: 'live' }, data => {
+  console.log('\n==================== MICROSOFT-LOGIN ====================')
+  console.log(` 1. Im Browser oeffnen: ${data.verification_uri}`)
+  console.log(` 2. Code eingeben:      ${data.user_code}`)
+  console.log(' 3. Mit dem Konto anmelden, das zu diesem Bot gehoert.')
+  console.log('==========================================================\n')
+})
+
+function spy (obj, name, label) {
+  const orig = obj[name].bind(obj)
+  obj[name] = async (...a) => {
+    try {
+      const r = await orig(...a)
+      console.log(`  ok      ${label}`)
+      return r
+    } catch (e) {
+      const msg = String(e && e.message || e).split('\n')[0]
+      if (!errors.length) console.log(`  FEHLER  ${label}: ${msg}`)
+      errors.push({ label, msg, full: String(e && e.message || e) })
+      throw e
+    }
+  }
+}
+spy(flow.msa, 'authDeviceCode', 'Microsoft-Anmeldung')
+spy(flow.xbl, 'getUserToken', 'Xbox-Benutzer-Token')
+spy(flow.xbl, 'getDeviceToken', 'Xbox-Geraete-Token')
+spy(flow.xbl, 'getXSTSToken', 'Xbox-Sicherheitstoken (XSTS)')
+if (isJava) {
+  spy(flow.mca, 'getAccessToken', 'Minecraft-Java-Token')
+  spy(flow.mca, 'fetchProfile', 'Minecraft-Java-Profil')
+}
+
+function hint (text) {
+  const t = text.toLowerCase()
+  if (t.includes('2148916233') || t.includes('does not have an xbox') || t.includes('create') && t.includes('xbox')) {
+    return 'Das Microsoft-Konto hat KEIN Xbox-Profil. Einmal auf https://www.xbox.com anmelden und einen Gamertag anlegen, danach hier neu versuchen.'
+  }
+  if (t.includes('2148916238') || t.includes('under 18') || t.includes('child')) {
+    return 'Kinder-Konto: Es muss in einer Microsoft-Familiengruppe von einem Erwachsenen freigegeben werden (account.microsoft.com/family).'
+  }
+  if (t.includes('2148916235') || t.includes('banned') || t.includes('country')) {
+    return 'Xbox Live ist fuer die Region dieses Kontos gesperrt oder das Konto ist gesperrt.'
+  }
+  if (t.includes('2148916236') || t.includes('2148916237') || t.includes('adult')) {
+    return 'Das Konto braucht eine Alters-/Erwachsenen-Verifizierung bei Xbox.'
+  }
+  if (t.includes('not found') || t.includes('profile') || t.includes('own minecraft')) {
+    return 'Das Konto besitzt Minecraft: Java Edition nicht (oder hat noch keinen Profilnamen). Mit dem Launcher einmal pruefen: minecraft.net/profile.'
+  }
+  if (t.includes('invalid_grant') || t.includes('device_code')) {
+    return 'Der Geraete-Code wurde nicht rechtzeitig/richtig bestaetigt. Mit  --neu  noch einmal starten und den Code SOFORT eingeben.'
+  }
+  return 'Unbekannter Fehler – den obigen Text bitte weitergeben.'
+}
+
+console.log(`Pruefe Konto fuer Bot ${id} (${isJava ? 'Java' : 'Bedrock'}) ...`)
+;(async () => {
+  try {
+    if (isJava) {
+      const r = await flow.getMinecraftJavaToken({ fetchProfile: true })
+      if (!r.profile || r.profile.error) throw new Error('Kein Minecraft-Java-Profil – besitzt das Konto Minecraft Java? ' + JSON.stringify(r.profile || {}))
+      console.log(`\nERFOLG: Anmeldung ok, Spielername: ${r.profile.name}`)
+    } else {
+      await flow.getXboxToken('https://multiplayer.minecraft.net/')
+      console.log('\nERFOLG: Xbox-Anmeldung fuer Bedrock ist ok.')
+    }
+    process.exit(0)
+  } catch (e) {
+    const first = errors[0] || { label: 'unbekannt', full: String(e && e.message || e) }
+    console.log(`\nURSACHE (erster Fehler, Schritt "${first.label}"):\n  ${first.full.split('\n').join('\n  ')}`)
+    console.log(`\nHINWEIS: ${hint(first.full)}`)
+    process.exit(1)
+  }
+})()
+EOF_AUTH_CHECK_JS
 cat > "$DIR/bedrock.js" <<'EOF_BEDROCK_JS'
 'use strict'
 const bedrock = require('bedrock-protocol')
@@ -624,6 +717,21 @@ runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/b
 uctl enable --now "bot@$ID.service"
 echo "Bot $ID laeuft jetzt (Autostart aktiv)."
 LOGIN_EOF
+
+atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
+#!/usr/bin/env bash
+# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:  bot-auth-check j2 [--neu]
+set -Eeuo pipefail
+ID="${1:-}"
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu]   (--neu loescht die gespeicherte Anmeldung dieses Bots)" >&2; exit 2; }
+[[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
+U=autosell
+UID_N=$(id -u "$U")
+runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user stop "bot@$ID.service" 2>/dev/null || true
+pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
+if [[ "${2:-}" == "--neu" ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
+runuser -l "$U" --session-command "cd ~/bedrock-bots && exec node auth-check.js $ID"
+CHECK_EOF
 
 # ---------- 6. VNC-Steuerung ----------
 echo ">>> 7/8 VNC-Steuerung aktualisieren"
@@ -862,7 +970,8 @@ cat <<MSG
 Naechste Schritte
 -----------------
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
-     bot-login j1   bot-login j2 ...   (Java, j1 bis j5)
+     bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
+     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'

@@ -206,6 +206,21 @@ uctl enable --now "bot@$ID.service"
 echo "Bot $ID laeuft jetzt (Autostart aktiv)."
 LOGIN_EOF
 
+atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
+#!/usr/bin/env bash
+# Zeigt, bei welchem Schritt die Anmeldung eines Kontos scheitert:  bot-auth-check j2 [--neu]
+set -Eeuo pipefail
+ID="${1:-}"
+[[ $ID =~ ^[jb][1-9][0-9]*$ ]] || { echo "Aufruf: bot-auth-check j2 [--neu]   (--neu loescht die gespeicherte Anmeldung dieses Bots)" >&2; exit 2; }
+[[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
+U=autosell
+UID_N=$(id -u "$U")
+runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user stop "bot@$ID.service" 2>/dev/null || true
+pkill -u "$U" -f "bot\.js $ID( |\$)" 2>/dev/null || true
+if [[ "${2:-}" == "--neu" ]]; then rm -rf "/home/$U/bedrock-bots/profiles/$ID"; fi
+runuser -l "$U" --session-command "cd ~/bedrock-bots && exec node auth-check.js $ID"
+CHECK_EOF
+
 # ---------- 6. VNC-Steuerung ----------
 echo ">>> 7/8 VNC-Steuerung aktualisieren"
 CASE_ATTACH=""; CASE_ROOT=""; SUDO=""; GUEST=""; OPEN=""; TARGETS="$PRISM $BOTS_J $BOTS_B"
@@ -443,7 +458,8 @@ cat <<MSG
 Naechste Schritte
 -----------------
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
-     bot-login j1   bot-login j2 ...   (Java, j1 bis j5)
+     bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
+     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen
      sudo -iu autosell /home/autosell/afk-client-2/bin/setup-gui.sh   (VNC Port 5902), danach in der App 'Neu starten'
