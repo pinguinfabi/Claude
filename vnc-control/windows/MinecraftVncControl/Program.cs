@@ -999,10 +999,11 @@ internal sealed class ChatForm : Form
             switch (type)
             {
                 case "hello":
+                    var helloState = root.GetProperty("state").GetString();
                     UiPost(() =>
                     {
                         log.Clear();
-                        statusLabel.Text = "● Verbunden – Bot: " + StateText(root.GetProperty("state").GetString());
+                        statusLabel.Text = "● Verbunden – Bot: " + StateText(helloState);
                     });
                     break;
                 case "state":
@@ -1089,7 +1090,17 @@ internal sealed class ChatForm : Form
         }
         try
         {
-            BeginInvoke(action);
+            BeginInvoke(() =>
+            {
+                try
+                {
+                    action();
+                }
+                catch
+                {
+                    // eine fehlerhafte Anzeige darf die App nie abstuerzen lassen
+                }
+            });
         }
         catch (InvalidOperationException)
         {
