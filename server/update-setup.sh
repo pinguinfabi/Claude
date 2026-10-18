@@ -544,10 +544,26 @@ exports.connect = function connect (ctx) {
     try { text = typeof reason === 'string' ? reason : JSON.stringify(reason) } catch (e) { /* roh lassen */ }
     ctx.kick(text)
   })
-  bot.on('error', e => ctx.closed('Fehler: ' + (e && e.message ? e.message : e)))
+  // Einzelne unlesbare Pakete beenden die Verbindung nicht (Relog nur bei echten Verbindungsfehlern)
+  const PARSE_RE = /Read error|Parse error|PartialReadError|Invalid tag|Unexpected buffer end|Chunk size is/i
+  let parseErrors = 0
+  let lastParseNote = 0
+  bot.on('error', e => {
+    const msg = e && e.message ? e.message : String(e)
+    if (PARSE_RE.test(msg)) {
+      parseErrors++
+      if (Date.now() - lastParseNote > 60000) {
+        lastParseNote = Date.now()
+        ctx.diag && ctx.diag(`Unlesbares Paket ignoriert (${parseErrors}x): ${msg.slice(0, 120)}`)
+      }
+      return
+    }
+    ctx.closed('Fehler: ' + msg)
+  })
   bot.on('end', reason => { ended = true; ctx.closed('Verbindung beendet' + (reason ? `: ${reason}` : '')) })
 
   return {
+    raw: bot, // nur fuer Tests
     close: () => { if (!ended) { try { bot.end('Bot beendet') } catch (e) { /* schon zu */ } } },
     say: text => bot.chat(text),
     keepalive: () => bot.swingArm('right')
@@ -782,7 +798,23 @@ exports.connect = function connect (ctx) {
   c.on('join', () => ctx.join())
   c.on('spawn', () => ctx.spawn())
   c.on('kick', p => ctx.kick(p && (p.message || p.reason)))
-  c.on('error', e => ctx.closed('Fehler: ' + (e && e.message ? e.message : e)))
+  // Ein einzelnes unlesbares Paket (z. B. "Read error ... Invalid tag") beendet die Verbindung NICHT:
+  // die Bibliothek liest das naechste Paket normal weiter. Nur echte Verbindungsfehler fuehren zum Relog.
+  const PARSE_RE = /Read error|Parse error|PartialReadError|Invalid tag|Unexpected buffer end|Chunk size is/i
+  let parseErrors = 0
+  let lastParseNote = 0
+  c.on('error', e => {
+    const msg = e && e.message ? e.message : String(e)
+    if (PARSE_RE.test(msg)) {
+      parseErrors++
+      if (Date.now() - lastParseNote > 60000) {
+        lastParseNote = Date.now()
+        ctx.diag && ctx.diag(`Unlesbares Paket ignoriert (${parseErrors}x): ${msg.slice(0, 120)}`)
+      }
+      return
+    }
+    ctx.closed('Fehler: ' + msg)
+  })
   c.on('close', () => ctx.closed('Verbindung geschlossen'))
   c.on('text', p => {
     try {
@@ -794,6 +826,7 @@ exports.connect = function connect (ctx) {
   })
 
   return {
+    raw: c, // nur fuer Tests
     close: () => { try { c.disconnect('Bot beendet') } catch (e) { c.close() } },
     say: text => {
       if (text.startsWith('/')) {
