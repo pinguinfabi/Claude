@@ -96,18 +96,20 @@ internal sealed class MainForm : Form
     /// <summary>Feste Ziele auf dem Server (Id = Name in vnc-control, Port = VNC-Port auf dem Server).</summary>
     private static readonly TargetDef[] Targets =
     {
-        new("afk2", "Crafter", "Crafter-Account", 5902),
-        new("afk3", "Account 1", "", 5903),
-        new("afk4", "Account 2", "", 5904),
-        new("afk5", "Account 3", "", 5905),
-        new("afk6", "Account 4", "", 5906),
-        new("afk7", "Account 5", "", 5907),
-        new("b1", "Bedrock 1", "", 0, true),
-        new("b2", "Bedrock 2", "", 0, true),
-        new("b3", "Bedrock 3", "", 0, true),
-        new("b4", "Bedrock 4", "", 0, true),
-        new("b5", "Bedrock 5", "", 0, true)
+        new("afk1", "Prism 1", "", 5901),
+        new("afk2", "Prism 2", "", 5902),
+        new("j1", "Java-Bot 1", "", 0, true, 6101),
+        new("j2", "Java-Bot 2", "", 0, true, 6102),
+        new("j3", "Java-Bot 3", "", 0, true, 6103),
+        new("j4", "Java-Bot 4", "", 0, true, 6104),
+        new("j5", "Java-Bot 5", "", 0, true, 6105),
+        new("b1", "Bedrock-Bot 1", "", 0, true, 6201),
+        new("b2", "Bedrock-Bot 2", "", 0, true, 6202),
+        new("b3", "Bedrock-Bot 3", "", 0, true, 6203),
+        new("b4", "Bedrock-Bot 4", "", 0, true, 6204),
+        new("b5", "Bedrock-Bot 5", "", 0, true, 6205)
     };
+
 
     private readonly TextBox hostBox = MakeTextBox();
     private readonly NumericUpDown portBox = new()
@@ -222,7 +224,7 @@ internal sealed class MainForm : Form
         });
         titleBox.Controls.Add(new Label
         {
-            Text = "Java-Clients und Bedrock-Bots steuern",
+            Text = "Prism-Clients und Chat-Bots steuern",
             ForeColor = Theme.Muted,
             AutoSize = true,
             Margin = new Padding(0, 2, 0, 0)
@@ -285,16 +287,20 @@ internal sealed class MainForm : Form
         };
         foreach (var target in Targets)
         {
-            if (target.Id == "afk2")
+            if (target.Id == "afk1")
             {
-                list.Controls.Add(SectionLabel("JAVA · PRISM-CLIENTS"));
+                list.Controls.Add(SectionLabel("PRISM · JAVA-CLIENTS MIT MODS (VNC)"));
+            }
+            else if (target.Id == "j1")
+            {
+                list.Controls.Add(SectionLabel("JAVA · CHAT-BOTS (hugosmp.net)"));
             }
             else if (target.Id == "b1")
             {
-                list.Controls.Add(SectionLabel("BEDROCK · BOTS (hugosmp.net)"));
+                list.Controls.Add(SectionLabel("BEDROCK · CHAT-BOTS (hugosmp.net)"));
             }
-            var card = new AccountCard(target, settings.LabelFor(target), 15000 + (target.Port % 100));
-            card.OpenButton.Click += (_, _) => OpenViewer(card, silent: false);
+            var card = new AccountCard(target, settings.LabelFor(target), target.Bot ? 10000 + target.ChatPort : 15000 + (target.Port % 100));
+            card.OpenButton.Click += (_, _) => { if (card.Target.Bot) { OpenChat(card); } else { OpenViewer(card, silent: false); } };
             card.RestartButton.Click += async (_, _) => await RestartAsync(card);
             card.EditButton.Click += (_, _) => EditLabel(card);
             accounts.Add(card);
@@ -413,13 +419,13 @@ internal sealed class MainForm : Form
 
             await Task.Run(() => client.Connect());
             sshClient = client;
-            foreach (var account in accounts.Where(a => !a.Target.Bedrock))
+            foreach (var account in accounts)
             {
                 var forwarding = new ForwardedPortLocal(
                     "127.0.0.1",
                     (uint)account.LocalPort,
                     "127.0.0.1",
-                    (uint)account.Target.Port);
+                    (uint)(account.Target.Bot ? account.Target.ChatPort : account.Target.Port));
                 client.AddForwardedPort(forwarding);
                 forwarding.Start();
                 account.Forwarding = forwarding;
@@ -508,9 +514,9 @@ internal sealed class MainForm : Form
                 }
 
                 account.ServiceActive = status.Service == "active";
-                if (account.Target.Bedrock)
+                if (account.Target.Bot)
                 {
-                    ApplyBedrockStatus(account, status);
+                    ApplyBotStatus(account, status);
                     continue;
                 }
                 switch (status.Service)
@@ -555,8 +561,8 @@ internal sealed class MainForm : Form
         }
     }
 
-    /// <summary>Bedrock-Bots: Status = systemd-Dienst + Zustandsdatei des Bots (up / login / down).</summary>
-    private static void ApplyBedrockStatus(AccountCard account, RemoteStatus status)
+    /// <summary>Chat-Bots (Java und Bedrock): Status = systemd-Dienst + Zustandsdatei des Bots (up / login / down).</summary>
+    private static void ApplyBotStatus(AccountCard account, RemoteStatus status)
     {
         var id = account.Target.Id;
         if (status.Service == "missing")
@@ -565,7 +571,7 @@ internal sealed class MainForm : Form
         }
         else if (status.Vnc == "login")
         {
-            account.SetStatus($"Login nötig – auf dem Server: bedrock-login {id}", Theme.Bad);
+            account.SetStatus($"Login nötig – auf dem Server: bot-login {id}", Theme.Bad);
         }
         else if (status.Service == "active" && status.Vnc == "up")
         {
@@ -588,7 +594,7 @@ internal sealed class MainForm : Form
     /// <summary>Repariert nur die VNC-Brücke eines laufenden Clients; gestoppte Clients werden nie automatisch gestartet.</summary>
     private async Task AutoRepairAsync(AccountCard account, RemoteStatus status)
     {
-        if (account.Target.Bedrock)
+        if (account.Target.Bot)
         {
             return;
         }
@@ -693,7 +699,7 @@ internal sealed class MainForm : Form
     private void OpenAll()
     {
         var opened = 0;
-        foreach (var account in accounts.Where(a => a.ServiceActive && !a.Target.Bedrock))
+        foreach (var account in accounts.Where(a => a.ServiceActive && !a.Target.Bot))
         {
             if (OpenViewer(account, silent: true))
             {
@@ -703,6 +709,21 @@ internal sealed class MainForm : Form
         messageLabel.Text = opened == 0
             ? "Kein Account ist gerade online."
             : $"{opened} VNC-Fenster geöffnet.";
+    }
+
+    private readonly Dictionary<string, ChatForm> chats = new();
+
+    private void OpenChat(AccountCard account)
+    {
+        if (chats.TryGetValue(account.Target.Id, out var existing) && !existing.IsDisposed)
+        {
+            existing.WindowState = FormWindowState.Normal;
+            existing.Activate();
+            return;
+        }
+        var form = new ChatForm($"{account.Label.Name} ({account.Target.Id})", account.LocalPort);
+        chats[account.Target.Id] = form;
+        form.Show(this);
     }
 
     private bool OpenViewer(AccountCard account, bool silent)
@@ -776,6 +797,14 @@ internal sealed class MainForm : Form
         }
         disconnecting = true;
         statusTimer.Stop();
+        foreach (var chat in chats.Values.ToList())
+        {
+            if (!chat.IsDisposed)
+            {
+                chat.Close();
+            }
+        }
+        chats.Clear();
         try
         {
             foreach (var account in accounts)
@@ -847,7 +876,229 @@ internal sealed class MainForm : Form
     private sealed record RemoteStatus(string Service, string Vnc);
 }
 
-internal sealed record TargetDef(string Id, string DefaultName, string DefaultNote, int Port, bool Bedrock = false);
+/// <summary>Chat-Fenster eines Bots: wie der Minecraft-Chat (lesen, schreiben, /befehle).</summary>
+internal sealed class ChatForm : Form
+{
+    private static readonly System.Text.RegularExpressions.Regex ColorCodes = new("§.", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private readonly RichTextBox log = new()
+    {
+        ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Text,
+        Dock = DockStyle.Fill, Font = new Font("Consolas", 10F), DetectUrls = false
+    };
+    private readonly TextBox input = new()
+    {
+        BackColor = Theme.Input, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle,
+        Dock = DockStyle.Fill, MaxLength = 256, Margin = new Padding(0, 4, 8, 0)
+    };
+    private readonly FlatButton sendButton = new("Senden", primary: true, width: 100) { Margin = new Padding(0, 3, 0, 0) };
+    private readonly Label statusLabel = new() { AutoSize = true, ForeColor = Theme.Muted, Text = "Verbinde …" };
+    private readonly int localPort;
+    private readonly CancellationTokenSource cts = new();
+    private readonly object writeLock = new();
+    private Stream? stream;
+
+    public ChatForm(string title, int localPort)
+    {
+        this.localPort = localPort;
+        Text = "Chat – " + title;
+        Size = new Size(760, 520);
+        MinimumSize = new Size(480, 320);
+        StartPosition = FormStartPosition.CenterParent;
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
+        Font = new Font("Segoe UI", 10F);
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(12) };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.Controls.Add(statusLabel, 0, 0);
+        root.Controls.Add(log, 0, 1);
+        var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
+        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        bottom.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        bottom.Controls.Add(input, 0, 0);
+        bottom.Controls.Add(sendButton, 1, 0);
+        root.Controls.Add(bottom, 0, 2);
+        Controls.Add(root);
+
+        sendButton.Click += (_, _) => Send();
+        input.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                Send();
+            }
+        };
+        Shown += (_, _) =>
+        {
+            input.Focus();
+            _ = Task.Run(() => LoopAsync(cts.Token));
+        };
+        FormClosed += (_, _) => cts.Cancel();
+    }
+
+    private async Task LoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var tcp = new TcpClient();
+                await tcp.ConnectAsync("127.0.0.1", localPort, ct);
+                using var net = tcp.GetStream();
+                lock (writeLock)
+                {
+                    stream = net;
+                }
+                using var reader = new StreamReader(net, System.Text.Encoding.UTF8);
+                while (!ct.IsCancellationRequested)
+                {
+                    var line = await reader.ReadLineAsync(ct);
+                    if (line is null)
+                    {
+                        break;
+                    }
+                    HandleLine(line);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch
+            {
+                // Tunnel oder Bot gerade nicht erreichbar -> weiter versuchen
+            }
+
+            lock (writeLock)
+            {
+                stream = null;
+            }
+            UiPost(() => statusLabel.Text = "● Getrennt – verbinde neu …");
+            try
+            {
+                await Task.Delay(3000, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    private void HandleLine(string line)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(line);
+            var root = doc.RootElement;
+            var type = root.GetProperty("t").GetString();
+            switch (type)
+            {
+                case "hello":
+                    UiPost(() =>
+                    {
+                        log.Clear();
+                        statusLabel.Text = "● Verbunden – Bot: " + StateText(root.GetProperty("state").GetString());
+                    });
+                    break;
+                case "state":
+                    var state = root.GetProperty("state").GetString();
+                    UiPost(() => statusLabel.Text = "● Verbunden – Bot: " + StateText(state));
+                    break;
+                case "chat":
+                    var kind = root.GetProperty("kind").GetString();
+                    var from = root.TryGetProperty("from", out var f) ? f.GetString() ?? "" : "";
+                    var msg = ColorCodes.Replace(root.GetProperty("msg").GetString() ?? "", "");
+                    var time = root.TryGetProperty("ts", out var ts)
+                        ? DateTimeOffset.FromUnixTimeMilliseconds(ts.GetInt64()).LocalDateTime
+                        : DateTime.Now;
+                    var text = string.IsNullOrEmpty(from) ? msg : kind == "self" ? $"» {msg}" : $"<{from}> {msg}";
+                    var color = kind == "self" ? Theme.Accent : string.IsNullOrEmpty(from) ? Theme.Muted : Theme.Text;
+                    UiPost(() => Append($"[{time:HH:mm:ss}] {text}", color));
+                    break;
+                case "error":
+                    var err = root.GetProperty("msg").GetString() ?? "Fehler";
+                    UiPost(() => Append("! " + err, Theme.Bad));
+                    break;
+            }
+        }
+        catch
+        {
+            // unbekannte Zeile ignorieren
+        }
+    }
+
+    private static string StateText(string? state) => state switch
+    {
+        "online" => "online",
+        "connecting" => "verbindet / Relog läuft",
+        "login" => "Login nötig",
+        _ => state ?? "?"
+    };
+
+    private void Send()
+    {
+        var text = input.Text.Trim();
+        if (text.Length == 0)
+        {
+            return;
+        }
+        byte[] data = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { t = "say", msg = text }) + "\n");
+        try
+        {
+            lock (writeLock)
+            {
+                if (stream is null)
+                {
+                    throw new IOException("Nicht verbunden.");
+                }
+                stream.Write(data, 0, data.Length);
+                stream.Flush();
+            }
+            input.Clear();
+        }
+        catch (Exception ex)
+        {
+            Append("! Senden fehlgeschlagen: " + ex.Message, Theme.Bad);
+        }
+    }
+
+    private void Append(string line, Color color)
+    {
+        if (log.TextLength > 200_000)
+        {
+            log.Select(0, 50_000);
+            log.SelectedText = "";
+        }
+        log.SelectionStart = log.TextLength;
+        log.SelectionColor = color;
+        log.AppendText(line + Environment.NewLine);
+        log.SelectionColor = log.ForeColor;
+        log.ScrollToCaret();
+    }
+
+    private void UiPost(Action action)
+    {
+        if (IsDisposed || !IsHandleCreated)
+        {
+            return;
+        }
+        try
+        {
+            BeginInvoke(action);
+        }
+        catch (InvalidOperationException)
+        {
+            // Fenster wird gerade geschlossen
+        }
+    }
+}
+
+internal sealed record TargetDef(string Id, string DefaultName, string DefaultNote, int Port, bool Bot = false, int ChatPort = 0);
 
 /// <summary>Eine Account-Kachel mit Name, Notiz, Status und Knöpfen.</summary>
 internal sealed class AccountCard : Panel
@@ -894,7 +1145,7 @@ internal sealed class AccountCard : Panel
         idLabel.Font = new Font("Segoe UI", 8.5F);
         idLabel.AutoSize = true;
         idLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        idLabel.Text = target.Bedrock ? $"{target.Id} · Bot" : $"{target.Id} · Port {target.Port}";
+        idLabel.Text = target.Bot ? $"{target.Id} · {(target.Id.StartsWith('j') ? "Java" : "Bedrock")}-Bot" : $"{target.Id} · Port {target.Port}";
         idLabel.Location = new Point(Width - 150, 12);
 
         var y = 36;
@@ -905,7 +1156,7 @@ internal sealed class AccountCard : Panel
         OpenButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         OpenButton.Location = new Point(RestartButton.Left - 8 - 124, y);
         EditButton.Font = new Font("Segoe UI Symbol", 11F);
-        OpenButton.Visible = !target.Bedrock;
+        OpenButton.Text = target.Bot ? "Chat" : "VNC öffnen";
 
         Controls.AddRange(new Control[] { accent, nameLabel, noteLabel, statusLabel, idLabel, OpenButton, RestartButton, EditButton });
         // idLabel liegt über den Knöpfen -> in die obere rechte Ecke schieben
@@ -924,7 +1175,7 @@ internal sealed class AccountCard : Panel
 
     public void SetConnected(bool connected)
     {
-        OpenButton.Enabled = connected && !Target.Bedrock;
+        OpenButton.Enabled = connected;
         RestartButton.Enabled = connected;
         if (!connected)
         {

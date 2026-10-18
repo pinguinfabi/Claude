@@ -1,0 +1,18 @@
+{
+  "name": "chat-bots",
+  "version": "1.0.0",
+  "description": "Java- und Bedrock-Chat-Bots mit Auto-Relog",
+  "main": "bot.js",
+  "scripts": {
+    "postinstall": "node fix-prebuild.js",
+    "test": "node test/java-local.js && node test/bedrock-chat.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bedrock-protocol": "^3.59.0",
+    "mineflayer": "^4.39.0"
+  },
+  "private": true
+}

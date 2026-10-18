@@ -52,10 +52,16 @@ Selbst bauen (nur wenn das .NET 9 SDK installiert ist)
   cd MinecraftVncControl
   dotnet publish -c Release -r win-x64 -o ..\release
 
-Version 1.4.0 – Bedrock-Bots
+Version 1.5.0 – Update-Paket
 ----------------------------
-- Zusaetzlich zu den sechs Java-Clients zeigt die App fuenf Bedrock-Bots (b1 bis b5)
-  fuer hugosmp.net. Sie haben kein VNC-Fenster; die Kachel zeigt Online / Verbindet /
-  Login noetig. "Neu starten" loest bei einem Bot einen neuen Login (Relog) aus.
-- Einrichtung auf dem Server: server/bedrock-setup.sh ausfuehren, danach pro Bot
-  "bedrock-login b1" (bis b5) und den Xbox-Login im Browser bestaetigen.
+Die App zeigt 12 Kacheln in drei Gruppen:
+- PRISM (VNC): afk1 (Port 5901, bisheriger afk3) und afk2 (Port 5902, neu und leer).
+- JAVA-CHAT-BOTS: j1 bis j5  (kein VNC)
+- BEDROCK-CHAT-BOTS: b1 bis b5  (kein VNC)
+Alle Bots joinen hugosmp.net, loggen sich bei Kick/Abbruch automatisch neu ein (Relog)
+und haben einen "Chat"-Knopf: Fenster wie der Minecraft-Chat (mitlesen, schreiben,
+/befehle senden). Namen/Notizen aller Kacheln mit dem Stift aendern.
+
+Server-Einrichtung: server/update-setup.sh als root ausfuehren (einmalig), danach pro Bot
+"bot-login j1" ... (Microsoft-Code im Browser eingeben). Neuer Prism-Platz afk2: Konto per
+setup-gui.sh anmelden (siehe Ende der Skript-Ausgabe).

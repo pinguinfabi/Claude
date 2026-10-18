@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HINWEIS: nur EINMAL ausfuehren. Die Bedrock-Bots danach mit bedrock-setup.sh einrichten (erweitert diese Steuerung).
+# HINWEIS: nur EINMAL ausfuehren. Danach update-setup.sh ausfuehren (Chat-Bots, neue Prism-Plaetze, Controller-Anbindung).
 # Umbau der AFK-Clients (als root ausfuehren):
 #   BLEIBT : afk2 (Crafter), afk3
 #   WEG    : autosell, autosell2, altes afk4
