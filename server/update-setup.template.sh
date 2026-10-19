@@ -171,6 +171,8 @@ RELOG_MINUTES=0
 # Anti-AFK: none oder swing (Arm schwingen alle 25-40 s)
 ANTI_AFK=none
 ENV_EOF
+# Discord-Alarm: Rollen-ID (kein Geheimnis) eintragen, falls noch nicht vorhanden. Die Webhook-URL setzt  bot-webhook set <URL>
+grep -q '^BOT_DISCORD_ROLE=' "$DIR/common.env" || printf '%s\n' '# Discord-Alarm bei Bot-Trennung: Rolle, die gepingt wird. Webhook-URL mit  bot-webhook set <URL>  setzen.' 'BOT_DISCORD_ROLE=1546930399786041404' '# Minuten ohne Spiel-Beitritt, bis einmal "dauerhaft offline" gemeldet wird' 'BOT_ALERT_AFTER_MIN=10' >> "$DIR/common.env"
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
 # Prism-App-Kennung fuer den Anmeldeweg "prism" aus einem vorhandenen Prism-Konto lesen
@@ -240,6 +242,46 @@ runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/b
 uctl enable --now "bot@$ID.service"
 echo "Bot $ID laeuft jetzt (Autostart aktiv)."
 LOGIN_EOF
+
+atomic_write /usr/local/bin/bot-webhook 755 <<'WEBHOOK_EOF'
+#!/usr/bin/env bash
+# Discord-Alarm fuer die Chat-Bots:  bot-webhook set <URL> | role <ID> | test | off | status
+set -Eeuo pipefail
+[[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
+U=autosell
+UID_N=$(id -u "$U")
+ENVF="/home/$U/bedrock-bots/common.env"
+uctl() { runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user "$@"; }
+restart_bots() {
+  local s
+  for s in $(uctl list-units 'bot@*.service' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do uctl restart "$s"; echo "  $s neu gestartet"; done
+}
+setkey() { # KEY WERT
+  sed -i "/^$1=/d" "$ENVF"; printf '%s=%s\n' "$1" "$2" >> "$ENVF"; chown "$U:$U" "$ENVF"; chmod 600 "$ENVF"
+}
+case "${1:-}" in
+  set)
+    URL="${2:-}"
+    [[ $URL =~ ^https://((ptb|canary)\.)?discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$ ]] || { echo "Das ist keine gueltige Discord-Webhook-URL." >&2; exit 2; }
+    setkey BOT_DISCORD_WEBHOOK "$URL"
+    echo "Webhook gespeichert. Laufende Bots werden neu gestartet, damit sie ihn nutzen:"
+    restart_bots
+    echo "Mit  bot-webhook test  kannst du eine Testnachricht senden." ;;
+  role)
+    [[ ${2:-} =~ ^[0-9]{5,25}$ ]] || { echo "Aufruf: bot-webhook role <Rollen-ID>" >&2; exit 2; }
+    setkey BOT_DISCORD_ROLE "$2"; echo "Rolle gespeichert."; restart_bots ;;
+  test)
+    runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; set +a; cd ~/bedrock-bots && exec node notify-test.js" ;;
+  off)
+    sed -i '/^BOT_DISCORD_WEBHOOK=/d' "$ENVF"; echo "Discord-Alarm ausgeschaltet."; restart_bots ;;
+  status)
+    URL=$(grep '^BOT_DISCORD_WEBHOOK=' "$ENVF" 2>/dev/null | cut -d= -f2- || true)
+    ROLE=$(grep '^BOT_DISCORD_ROLE=' "$ENVF" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n $URL ]]; then echo "Webhook: eingerichtet (endet auf ...${URL: -6})"; else echo "Webhook: NICHT eingerichtet"; fi
+    echo "Rolle:   ${ROLE:-keine}" ;;
+  *) echo "Aufruf: bot-webhook set <URL> | role <ID> | test | off | status" >&2; exit 2 ;;
+esac
+WEBHOOK_EOF
 
 atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
 #!/usr/bin/env bash
@@ -502,7 +544,7 @@ Naechste Schritte
 -----------------
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
-     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
+     Discord-Alarm bei Trennung:  bot-webhook set <Webhook-URL>   danach:  bot-webhook test\n     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
        dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth prism   und bei Erfolg:  bot-login j2 prism
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen

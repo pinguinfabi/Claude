@@ -6,6 +6,7 @@ const fs = require('fs')
 const path = require('path')
 const net = require('net')
 const { hint, watchAuthErrors } = require('./authhint')
+const { create: createNotifier } = require('./notify')
 
 const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? process.env[k] : d)
 
@@ -33,6 +34,14 @@ function run ({ id, type, adapter }) {
   fs.mkdirSync(PROFILES, { recursive: true })
   fs.mkdirSync(STATE_DIR, { recursive: true })
   const log = (...a) => console.log(new Date().toISOString(), `[${id}]`, ...a)
+
+  // Discord-Benachrichtigung (nur im Dienstbetrieb, nicht beim Login)
+  const notify = loginMode ? { enabled: false, name: id, send () {}, flush: () => Promise.resolve() } : createNotifier({ id, type, log })
+  const ALERT_AFTER_MS = parseInt(env('BOT_ALERT_AFTER_MIN', '10'), 10) * 60000
+  let offlineSince = Date.now() // seit wann der Bot nicht im Spiel ist
+  let alertedDown = false // fuer diesen Ausfall wurde schon gemeldet
+  let lastKick = ''
+  let lastDelaySec = 0
 
   // Sperre: pro Bot darf nur EIN Prozess laufen (sonst zerstoeren sich zwei Anmeldungen gegenseitig)
   const lockFile = path.join(STATE_DIR, id + '.lock')
@@ -139,6 +148,7 @@ function run ({ id, type, adapter }) {
     dead = false
     lastPacket = connectStart = Date.now()
     lastDiag = ''
+    lastKick = ''
     log(`Verbinde mit ${HOST}:${PORT} (${type}) ...`)
 
     const mine = { conn: null }
@@ -167,6 +177,7 @@ function run ({ id, type, adapter }) {
       chat: e => { if (!loginMode) pushChat(e) },
       kick: text => {
         const t = String(text || '').replace(/\n/g, ' ')
+        lastKick = t
         log('Vom Server getrennt:', t)
         note('Vom Server getrennt: ' + t)
       },
@@ -189,6 +200,12 @@ function run ({ id, type, adapter }) {
     setState('online')
     log(`ONLINE – ${why}.`)
     note(`ONLINE – ${why}`)
+    if (alertedDown) {
+      const mins = Math.max(1, Math.round((Date.now() - offlineSince) / 60000))
+      notify.send('up', `✅ **${notify.name}** ist wieder online (Ausfall: ca. ${mins} min).`, { ping: false, minGapMs: 0 })
+    }
+    alertedDown = false
+    offlineSince = 0
     startKeepalive()
     if (loginMode) {
       log('Login erfolgreich gespeichert. Beende in 5 s ...')
@@ -212,6 +229,7 @@ function run ({ id, type, adapter }) {
     } else {
       setState('login')
       log(`LOGIN NOETIG – bitte auf dem Server ausfuehren: bot-login ${id}`)
+      alertLogin()
       shutdown(78) // 78 = kein Neustart durch systemd
     }
   }
@@ -232,8 +250,13 @@ function run ({ id, type, adapter }) {
     if (loginMode) return shutdown(1)
     setState('login')
     log(`Anmeldung ungueltig/abgelehnt – bitte auf dem Server ausfuehren: bot-login ${id}  (Diagnose: bot-auth-check ${id} --neu)`)
+    alertLogin()
     shutdown(78)
   })
+
+  function alertLogin () {
+    notify.send('login', `🔐 **${notify.name}**: Die Microsoft-Anmeldung ist abgelaufen oder wurde abgelehnt. Bitte auf dem Server \`bot-login ${id}\` ausführen.`, { minGapMs: 0 })
+  }
 
   const isAuthError = r => /invalid_grant|device_code|authorization code|XSTS|xbl|authenticat/i.test(String(r))
   let authWipes = 0
@@ -249,6 +272,8 @@ function run ({ id, type, adapter }) {
     try { c.close() } catch (e) { /* schon zu */ }
     client = null
     if (stopping) return
+    const wasOnline = onlineSince > 0
+    const upMin = wasOnline ? Math.max(1, Math.round((Date.now() - onlineSince) / 60000)) : 0
     if (isAuthError(reason) && !loginDone) {
       if (loginMode && authWipes < 2) {
         authWipes++
@@ -259,12 +284,18 @@ function run ({ id, type, adapter }) {
       if (!loginMode) {
         setState('login')
         log(`Anmeldung ungueltig/abgelaufen – bitte auf dem Server ausfuehren: bot-login ${id}`)
+        alertLogin()
         return shutdown(78)
       }
     }
     if (onlineSince && Date.now() - onlineSince >= STABLE_MS) attempt = 0
     onlineSince = 0
+    if (wasOnline) offlineSince = Date.now()
     scheduleReconnect(reason, immediate)
+    if (wasOnline && !immediate && !loginMode) {
+      alertedDown = true
+      notify.send('down', `⚠️ **${notify.name}** wurde getrennt.\nGrund: ${lastKick || reason}\nWar ${upMin} min online. Neuer Versuch in ca. ${lastDelaySec} s.`)
+    }
   }
 
   function scheduleReconnect (reason, immediate = false) {
@@ -273,6 +304,7 @@ function run ({ id, type, adapter }) {
     const base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS)
     const delay = immediate ? 3000 : Math.round(base * (0.8 + Math.random() * 0.4))
     attempt++
+    lastDelaySec = Math.round(delay / 1000)
     log(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt}).`)
     note(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt})`)
     reconnectTimer = setTimeout(connect, delay)
@@ -287,6 +319,16 @@ function run ({ id, type, adapter }) {
     }
   }, 10000)
 
+  // Bot kommt dauerhaft nicht ins Spiel (z. B. Konto belegt, Server gesperrt): einmal melden
+  setInterval(() => {
+    if (loginMode || state === 'online' || alertedDown || !offlineSince) return
+    if (Date.now() - offlineSince >= ALERT_AFTER_MS) {
+      alertedDown = true
+      const mins = Math.round((Date.now() - offlineSince) / 60000)
+      notify.send('offline', `⚠️ **${notify.name}** ist seit ${mins} min nicht im Spiel.\nLetzter Grund: ${lastKick || lastDiag || 'unbekannt'}\nDer Bot versucht es weiter.`, { minGapMs: 0 })
+    }
+  }, 30000)
+
   function shutdown (code) {
     if (stopping) return
     stopping = true
@@ -295,7 +337,8 @@ function run ({ id, type, adapter }) {
     clearTimeout(relogTimer)
     clearInterval(afkTimer)
     try { if (client) client.close('Bot beendet') } catch (e) { /* egal */ }
-    setTimeout(() => process.exit(code), 500)
+    const wait = Promise.race([notify.flush(), new Promise(resolve => setTimeout(resolve, 4000))])
+    setTimeout(() => wait.then(() => process.exit(code)), 500)
   }
   process.on('SIGTERM', () => shutdown(0))
   process.on('SIGINT', () => shutdown(0))

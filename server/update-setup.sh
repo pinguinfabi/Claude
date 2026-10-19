@@ -180,6 +180,7 @@ const fs = require('fs')
 const path = require('path')
 const net = require('net')
 const { hint, watchAuthErrors } = require('./authhint')
+const { create: createNotifier } = require('./notify')
 
 const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? process.env[k] : d)
 
@@ -207,6 +208,14 @@ function run ({ id, type, adapter }) {
   fs.mkdirSync(PROFILES, { recursive: true })
   fs.mkdirSync(STATE_DIR, { recursive: true })
   const log = (...a) => console.log(new Date().toISOString(), `[${id}]`, ...a)
+
+  // Discord-Benachrichtigung (nur im Dienstbetrieb, nicht beim Login)
+  const notify = loginMode ? { enabled: false, name: id, send () {}, flush: () => Promise.resolve() } : createNotifier({ id, type, log })
+  const ALERT_AFTER_MS = parseInt(env('BOT_ALERT_AFTER_MIN', '10'), 10) * 60000
+  let offlineSince = Date.now() // seit wann der Bot nicht im Spiel ist
+  let alertedDown = false // fuer diesen Ausfall wurde schon gemeldet
+  let lastKick = ''
+  let lastDelaySec = 0
 
   // Sperre: pro Bot darf nur EIN Prozess laufen (sonst zerstoeren sich zwei Anmeldungen gegenseitig)
   const lockFile = path.join(STATE_DIR, id + '.lock')
@@ -313,6 +322,7 @@ function run ({ id, type, adapter }) {
     dead = false
     lastPacket = connectStart = Date.now()
     lastDiag = ''
+    lastKick = ''
     log(`Verbinde mit ${HOST}:${PORT} (${type}) ...`)
 
     const mine = { conn: null }
@@ -341,6 +351,7 @@ function run ({ id, type, adapter }) {
       chat: e => { if (!loginMode) pushChat(e) },
       kick: text => {
         const t = String(text || '').replace(/\n/g, ' ')
+        lastKick = t
         log('Vom Server getrennt:', t)
         note('Vom Server getrennt: ' + t)
       },
@@ -363,6 +374,12 @@ function run ({ id, type, adapter }) {
     setState('online')
     log(`ONLINE – ${why}.`)
     note(`ONLINE – ${why}`)
+    if (alertedDown) {
+      const mins = Math.max(1, Math.round((Date.now() - offlineSince) / 60000))
+      notify.send('up', `✅ **${notify.name}** ist wieder online (Ausfall: ca. ${mins} min).`, { ping: false, minGapMs: 0 })
+    }
+    alertedDown = false
+    offlineSince = 0
     startKeepalive()
     if (loginMode) {
       log('Login erfolgreich gespeichert. Beende in 5 s ...')
@@ -386,6 +403,7 @@ function run ({ id, type, adapter }) {
     } else {
       setState('login')
       log(`LOGIN NOETIG – bitte auf dem Server ausfuehren: bot-login ${id}`)
+      alertLogin()
       shutdown(78) // 78 = kein Neustart durch systemd
     }
   }
@@ -406,8 +424,13 @@ function run ({ id, type, adapter }) {
     if (loginMode) return shutdown(1)
     setState('login')
     log(`Anmeldung ungueltig/abgelehnt – bitte auf dem Server ausfuehren: bot-login ${id}  (Diagnose: bot-auth-check ${id} --neu)`)
+    alertLogin()
     shutdown(78)
   })
+
+  function alertLogin () {
+    notify.send('login', `🔐 **${notify.name}**: Die Microsoft-Anmeldung ist abgelaufen oder wurde abgelehnt. Bitte auf dem Server \`bot-login ${id}\` ausführen.`, { minGapMs: 0 })
+  }
 
   const isAuthError = r => /invalid_grant|device_code|authorization code|XSTS|xbl|authenticat/i.test(String(r))
   let authWipes = 0
@@ -423,6 +446,8 @@ function run ({ id, type, adapter }) {
     try { c.close() } catch (e) { /* schon zu */ }
     client = null
     if (stopping) return
+    const wasOnline = onlineSince > 0
+    const upMin = wasOnline ? Math.max(1, Math.round((Date.now() - onlineSince) / 60000)) : 0
     if (isAuthError(reason) && !loginDone) {
       if (loginMode && authWipes < 2) {
         authWipes++
@@ -433,12 +458,18 @@ function run ({ id, type, adapter }) {
       if (!loginMode) {
         setState('login')
         log(`Anmeldung ungueltig/abgelaufen – bitte auf dem Server ausfuehren: bot-login ${id}`)
+        alertLogin()
         return shutdown(78)
       }
     }
     if (onlineSince && Date.now() - onlineSince >= STABLE_MS) attempt = 0
     onlineSince = 0
+    if (wasOnline) offlineSince = Date.now()
     scheduleReconnect(reason, immediate)
+    if (wasOnline && !immediate && !loginMode) {
+      alertedDown = true
+      notify.send('down', `⚠️ **${notify.name}** wurde getrennt.\nGrund: ${lastKick || reason}\nWar ${upMin} min online. Neuer Versuch in ca. ${lastDelaySec} s.`)
+    }
   }
 
   function scheduleReconnect (reason, immediate = false) {
@@ -447,6 +478,7 @@ function run ({ id, type, adapter }) {
     const base = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS)
     const delay = immediate ? 3000 : Math.round(base * (0.8 + Math.random() * 0.4))
     attempt++
+    lastDelaySec = Math.round(delay / 1000)
     log(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt}).`)
     note(`Neuer Versuch in ${Math.round(delay / 1000)} s (Versuch ${attempt})`)
     reconnectTimer = setTimeout(connect, delay)
@@ -461,6 +493,16 @@ function run ({ id, type, adapter }) {
     }
   }, 10000)
 
+  // Bot kommt dauerhaft nicht ins Spiel (z. B. Konto belegt, Server gesperrt): einmal melden
+  setInterval(() => {
+    if (loginMode || state === 'online' || alertedDown || !offlineSince) return
+    if (Date.now() - offlineSince >= ALERT_AFTER_MS) {
+      alertedDown = true
+      const mins = Math.round((Date.now() - offlineSince) / 60000)
+      notify.send('offline', `⚠️ **${notify.name}** ist seit ${mins} min nicht im Spiel.\nLetzter Grund: ${lastKick || lastDiag || 'unbekannt'}\nDer Bot versucht es weiter.`, { minGapMs: 0 })
+    }
+  }, 30000)
+
   function shutdown (code) {
     if (stopping) return
     stopping = true
@@ -469,7 +511,8 @@ function run ({ id, type, adapter }) {
     clearTimeout(relogTimer)
     clearInterval(afkTimer)
     try { if (client) client.close('Bot beendet') } catch (e) { /* egal */ }
-    setTimeout(() => process.exit(code), 500)
+    const wait = Promise.race([notify.flush(), new Promise(resolve => setTimeout(resolve, 4000))])
+    setTimeout(() => wait.then(() => process.exit(code)), 500)
   }
   process.on('SIGTERM', () => shutdown(0))
   process.on('SIGINT', () => shutdown(0))
@@ -772,6 +815,71 @@ function preset (name) {
 
 module.exports = { preset, PRESETS }
 EOF_AUTHOPTS_JS
+cat > "$DIR/notify.js" <<'EOF_NOTIFY_JS'
+'use strict'
+// Discord-Benachrichtigungen (Webhook) fuer die Chat-Bots.
+// Konfiguration ueber Umgebungsvariablen (common.env):
+//   BOT_DISCORD_WEBHOOK  Webhook-URL (GEHEIM, nie ins Repo!)    BOT_DISCORD_ROLE  Rollen-ID, die gepingt wird
+//   BOT_LABEL            optionaler Anzeigename des Bots (env/<id>.env)
+const env = (k, d) => (process.env[k] !== undefined && process.env[k] !== '' ? process.env[k] : d)
+
+function create ({ id, type, log }) {
+  const url = env('BOT_DISCORD_WEBHOOK', '')
+  const roleRaw = env('BOT_DISCORD_ROLE', '')
+  const role = /^\d{5,25}$/.test(roleRaw) ? roleRaw : ''
+  const label = env('BOT_LABEL', '')
+  const name = `${type === 'java' ? 'Java' : 'Bedrock'}-Bot ${id}${label ? ` (${label})` : ''}`
+  const enabled = /^https?:\/\//.test(url)
+  const pending = new Set()
+  const lastSent = {}
+
+  async function post (text, ping) {
+    const mention = ping && role ? `<@&${role}> ` : ''
+    const body = {
+      username: 'Bot-Wächter',
+      content: (mention + text).slice(0, 1900),
+      // nur die eigene Rolle darf gepingt werden (nie @everyone aus Kick-Texten)
+      allowed_mentions: { parse: [], roles: ping && role ? [role] : [] }
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8000)
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  }
+
+  // kind: Art der Nachricht (je Art hoechstens eine pro Minute), ping: Rolle erwaehnen
+  function send (kind, text, { ping = true, minGapMs = 60000 } = {}) {
+    if (!enabled) return
+    const now = Date.now()
+    if (lastSent[kind] && now - lastSent[kind] < minGapMs) return
+    lastSent[kind] = now
+    const p = post(text, ping)
+      .catch(e => log('Discord-Nachricht fehlgeschlagen:', e.message))
+      .finally(() => pending.delete(p))
+    pending.add(p)
+  }
+
+  return { enabled, name, send, post, flush: () => Promise.allSettled([...pending]) }
+}
+
+module.exports = { create }
+EOF_NOTIFY_JS
+cat > "$DIR/notify-test.js" <<'EOF_NOTIFY_TEST_JS'
+'use strict'
+// Sendet eine Testnachricht an den konfigurierten Discord-Webhook (Aufruf ueber:  bot-webhook test)
+const { create } = require('./notify')
+const n = create({ id: 'test', type: 'java', log: console.log })
+if (!n.enabled) {
+  console.log('Discord-Webhook ist NICHT eingerichtet (bot-webhook set <URL>).')
+  process.exit(1)
+}
+n.post('🧪 Testnachricht von **bot-webhook**: Der Alarm bei Bot-Trennungen funktioniert.', true)
+  .then(() => { console.log('Testnachricht gesendet (mit Rollen-Ping, falls BOT_DISCORD_ROLE gesetzt ist).'); process.exit(0) })
+  .catch(e => { console.log('FEHLER beim Senden: ' + e.message + ' (URL pruefen / Webhook in Discord noch vorhanden?)'); process.exit(1) })
+EOF_NOTIFY_TEST_JS
 cat > "$DIR/bedrock.js" <<'EOF_BEDROCK_JS'
 'use strict'
 const bedrock = require('bedrock-protocol')
@@ -895,6 +1003,8 @@ RELOG_MINUTES=0
 # Anti-AFK: none oder swing (Arm schwingen alle 25-40 s)
 ANTI_AFK=none
 ENV_EOF
+# Discord-Alarm: Rollen-ID (kein Geheimnis) eintragen, falls noch nicht vorhanden. Die Webhook-URL setzt  bot-webhook set <URL>
+grep -q '^BOT_DISCORD_ROLE=' "$DIR/common.env" || printf '%s\n' '# Discord-Alarm bei Bot-Trennung: Rolle, die gepingt wird. Webhook-URL mit  bot-webhook set <URL>  setzen.' 'BOT_DISCORD_ROLE=1546930399786041404' '# Minuten ohne Spiel-Beitritt, bis einmal "dauerhaft offline" gemeldet wird' 'BOT_ALERT_AFTER_MIN=10' >> "$DIR/common.env"
 # Java-Version der Bots (fehlt in aelteren common.env -> nachtragen)
 grep -q '^BOT_JAVA_VERSION=' "$DIR/common.env" || printf '%s\n' '# Java-Version der Bots; muss zum Server passen (1.21.8 funktioniert wie bei den Prism-Clients). Leer = automatisch' 'BOT_JAVA_VERSION=1.21.8' >> "$DIR/common.env"
 # Prism-App-Kennung fuer den Anmeldeweg "prism" aus einem vorhandenen Prism-Konto lesen
@@ -964,6 +1074,46 @@ runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; [ -f ~/b
 uctl enable --now "bot@$ID.service"
 echo "Bot $ID laeuft jetzt (Autostart aktiv)."
 LOGIN_EOF
+
+atomic_write /usr/local/bin/bot-webhook 755 <<'WEBHOOK_EOF'
+#!/usr/bin/env bash
+# Discord-Alarm fuer die Chat-Bots:  bot-webhook set <URL> | role <ID> | test | off | status
+set -Eeuo pipefail
+[[ $EUID -eq 0 ]] || { echo "Bitte als root starten." >&2; exit 1; }
+U=autosell
+UID_N=$(id -u "$U")
+ENVF="/home/$U/bedrock-bots/common.env"
+uctl() { runuser -u "$U" -- env XDG_RUNTIME_DIR="/run/user/$UID_N" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$UID_N/bus" systemctl --user "$@"; }
+restart_bots() {
+  local s
+  for s in $(uctl list-units 'bot@*.service' --state=active --no-legend --plain 2>/dev/null | awk '{print $1}'); do uctl restart "$s"; echo "  $s neu gestartet"; done
+}
+setkey() { # KEY WERT
+  sed -i "/^$1=/d" "$ENVF"; printf '%s=%s\n' "$1" "$2" >> "$ENVF"; chown "$U:$U" "$ENVF"; chmod 600 "$ENVF"
+}
+case "${1:-}" in
+  set)
+    URL="${2:-}"
+    [[ $URL =~ ^https://((ptb|canary)\.)?discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$ ]] || { echo "Das ist keine gueltige Discord-Webhook-URL." >&2; exit 2; }
+    setkey BOT_DISCORD_WEBHOOK "$URL"
+    echo "Webhook gespeichert. Laufende Bots werden neu gestartet, damit sie ihn nutzen:"
+    restart_bots
+    echo "Mit  bot-webhook test  kannst du eine Testnachricht senden." ;;
+  role)
+    [[ ${2:-} =~ ^[0-9]{5,25}$ ]] || { echo "Aufruf: bot-webhook role <Rollen-ID>" >&2; exit 2; }
+    setkey BOT_DISCORD_ROLE "$2"; echo "Rolle gespeichert."; restart_bots ;;
+  test)
+    runuser -l "$U" --session-command "set -a; . ~/bedrock-bots/common.env; set +a; cd ~/bedrock-bots && exec node notify-test.js" ;;
+  off)
+    sed -i '/^BOT_DISCORD_WEBHOOK=/d' "$ENVF"; echo "Discord-Alarm ausgeschaltet."; restart_bots ;;
+  status)
+    URL=$(grep '^BOT_DISCORD_WEBHOOK=' "$ENVF" 2>/dev/null | cut -d= -f2- || true)
+    ROLE=$(grep '^BOT_DISCORD_ROLE=' "$ENVF" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -n $URL ]]; then echo "Webhook: eingerichtet (endet auf ...${URL: -6})"; else echo "Webhook: NICHT eingerichtet"; fi
+    echo "Rolle:   ${ROLE:-keine}" ;;
+  *) echo "Aufruf: bot-webhook set <URL> | role <ID> | test | off | status" >&2; exit 2 ;;
+esac
+WEBHOOK_EOF
 
 atomic_write /usr/local/bin/bot-auth-check 755 <<'CHECK_EOF'
 #!/usr/bin/env bash
@@ -1226,7 +1376,7 @@ Naechste Schritte
 -----------------
 1) Chat-Bots anmelden (je Bot einmal, Code im Browser eingeben):
      bot-login j1   bot-login j2 ...   (Java, j1 bis j5)   - jedes Konto in jedem Platz moeglich
-     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
+     Discord-Alarm bei Trennung:  bot-webhook set <Webhook-URL>   danach:  bot-webhook test\n     Klappt ein Konto nicht:  bot-auth-check j2 --neu   (zeigt die genaue Ursache)
        dann anderen Anmeldeweg testen:  bot-auth-check j2 --neu --auth prism   und bei Erfolg:  bot-login j2 prism
      bot-login b1   bot-login b2 ...   (Bedrock, b1 bis b5)
 2) Neuer Prism-Platz afk2: Konto in Prism hinzufuegen

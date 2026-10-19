@@ -10,6 +10,13 @@ const VERSION = '1.12.2'
 const PORT = 25599
 const CONTROL = 6190
 const results = {}
+// Mini-"Discord": faengt die Webhook-Nachrichten des Bots ab
+const hooks = []
+require('http').createServer((req, res) => {
+  let b = ''
+  req.on('data', d => { b += d })
+  req.on('end', () => { try { hooks.push(JSON.parse(b)) } catch (e) { /* egal */ } res.writeHead(204); res.end() })
+}).listen(19801, '127.0.0.1')
 let joins = 0
 let serverGot = null
 
@@ -27,7 +34,7 @@ server.on('login', client => {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jbot-'))
 const bot = spawn('node', [path.join(__dirname, '..', 'bot.js'), 'j9'], {
   env: { ...process.env, BOT_HOST: '127.0.0.1', BOT_PORT: String(PORT), BOT_OFFLINE: '1', BOT_DIR: dir, BOT_VERSION: VERSION,
-    BOT_CONTROL_PORT: String(CONTROL), BOT_FALLBACK_MS: '2000', BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
+    BOT_CONTROL_PORT: String(CONTROL), BOT_FALLBACK_MS: '2000', BOT_DISCORD_WEBHOOK: 'http://127.0.0.1:19801/api/webhooks/1/test', BOT_DISCORD_ROLE: '1546930399786041404', BOT_LABEL: 'Farmer', BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 bot.stdout.on('data', d => process.stdout.write('[bot] ' + d))
@@ -56,9 +63,15 @@ setTimeout(() => {
     const sentOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === 'Hallo aus dem Controller')
     const cmdOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === '/home base')
     const relog = joins >= 2
+    const down = hooks.find(h => /getrennt/.test(h.content))
+    const up = hooks.find(h => /wieder online/.test(h.content))
+    const pingOk = !!down && down.content.startsWith('<@&1546930399786041404>') && JSON.stringify(down.allowed_mentions.roles) === '["1546930399786041404"]'
+    const reasonOk = !!down && /Test-Kick/.test(down.content) && /Java-Bot j9 \(Farmer\)/.test(down.content)
+    const upOk = !!up && !up.content.includes('<@&') && up.allowed_mentions.roles.length === 0
+    console.log(`[test] Discord-Alarm mit Rollen-Ping: ${pingOk}, Grund+Name: ${reasonOk}, Entwarnung ohne Ping: ${upOk} (Nachrichten: ${hooks.length})`)
     const notes = lines.some(l => l.t === 'chat' && l.kind === 'system' && /Getrennt|Neuer Versuch/.test(l.msg))
     const fallback = lines.some(l => l.t === 'chat' && l.kind === 'system' && /kein Spawn-Signal/.test(l.msg))
     console.log(`\n[test] Chat empfangen: ${chatIn}\n[test] Nachricht gesendet+bestaetigt: ${sentOk} (Server: ${serverGot})\n[test] Befehl gesendet: ${cmdOk}\n[test] Relog nach Kick: ${relog} (Joins ${joins})\n[test] Grund im Chat sichtbar: ${notes}\n[test] Online per Fallback: ${fallback}`)
-    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback ? 0 : 1)
+    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback && pingOk && reasonOk && upOk ? 0 : 1)
   }, 1500)
 }, 20000)
