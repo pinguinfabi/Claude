@@ -65,3 +65,9 @@ und haben einen "Chat"-Knopf: Fenster wie der Minecraft-Chat (mitlesen, schreibe
 Server-Einrichtung: server/update-setup.sh als root ausfuehren (einmalig), danach pro Bot
 "bot-login j1" ... (Microsoft-Code im Browser eingeben). Neuer Prism-Platz afk2: Konto per
 setup-gui.sh anmelden (siehe Ende der Skript-Ausgabe).
+
+Version 1.6.0
+-------------
+- Chat-Fenster der Bots: Schalter "Sneaken (Schleichen)". Der Bot schleicht dauerhaft (auch nach
+  Relog/Neustart des Dienstes). Alternativ im Chat-Fenster:  !sneak   !sneak on   !sneak off   !stand
+  (diese Befehle gehen nicht an den Minecraft-Server, sondern steuern den Bot).

@@ -19,6 +19,8 @@ require('http').createServer((req, res) => {
 }).listen(19801, '127.0.0.1')
 let joins = 0
 let serverGot = null
+const entityActions = []
+const chatsToServer = []
 
 const server = mc.createServer({ 'online-mode': false, host: '127.0.0.1', port: PORT, version: VERSION, maxPlayers: 5 })
 server.on('login', client => {
@@ -27,7 +29,8 @@ server.on('login', client => {
   client.write('position', { x: 0, y: 64, z: 0, yaw: 0, pitch: 0, flags: 0, teleportId: 0 })
   if (joins > 1) client.write('update_health', { health: 20, food: 20, foodSaturation: 5 }) // 1. Join: kein Spawn-Signal -> Fallback
   setTimeout(() => client.write('chat', { message: JSON.stringify({ text: '<Steve> hallo bot' }), position: 0 }), 2500)
-  client.on('chat', p => { serverGot = p.message; console.log('[test] Server erhielt Chat:', p.message) })
+  client.on('entity_action', p => { entityActions.push({ joins, id: p.actionId }); console.log('[test] Server: entity_action', p.actionId, '(Join', joins + ')') })
+  client.on('chat', p => { chatsToServer.push(p.message); serverGot = p.message; console.log('[test] Server erhielt Chat:', p.message) })
   if (joins === 1) setTimeout(() => client.end('Test-Kick (AFK)'), 9000)
 })
 
@@ -54,6 +57,8 @@ setTimeout(() => {
   })
   setTimeout(() => sock.write(JSON.stringify({ t: 'say', msg: 'Hallo aus dem Controller' }) + '\n'), 4000)
   setTimeout(() => sock.write(JSON.stringify({ t: 'say', msg: '/home base' }) + '\n'), 5500)
+  setTimeout(() => sock.write(JSON.stringify({ t: 'sneak', on: true }) + '\n'), 3000)
+  setTimeout(() => sock.write(JSON.stringify({ t: 'say', msg: '!sneak off' }) + '\n'), 14000)
 }, 2000)
 
 setTimeout(() => {
@@ -63,6 +68,12 @@ setTimeout(() => {
     const sentOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === 'Hallo aus dem Controller')
     const cmdOk = lines.some(l => l.t === 'chat' && l.kind === 'self' && l.msg === '/home base')
     const relog = joins >= 2
+    const sneakOn = entityActions.some(a => a.joins === 1 && (a.id === 0 || a.id === 'start_sneaking'))
+    const sneakRelog = entityActions.some(a => a.joins === 2 && (a.id === 0 || a.id === 'start_sneaking'))
+    const sneakOff = entityActions.some(a => a.joins === 2 && (a.id === 1 || a.id === 'stop_sneaking'))
+    const sneakMsg = lines.some(l => l.t === 'sneak' && l.on === true)
+    const noLeak = !chatsToServer.some(m => String(m).startsWith('!'))
+    console.log(`[test] Sneaken an: ${sneakOn}, bleibt nach Relog: ${sneakRelog}, aus per !sneak off: ${sneakOff}, App informiert: ${sneakMsg}, Befehl nicht an Server: ${noLeak}`)
     const down = hooks.find(h => /getrennt/.test(h.content))
     const up = hooks.find(h => /wieder online/.test(h.content))
     const pingOk = !!down && down.content.startsWith('<@&1546930399786041404>') && JSON.stringify(down.allowed_mentions.roles) === '["1546930399786041404"]'
@@ -72,6 +83,6 @@ setTimeout(() => {
     const notes = lines.some(l => l.t === 'chat' && l.kind === 'system' && /Getrennt|Neuer Versuch/.test(l.msg))
     const fallback = lines.some(l => l.t === 'chat' && l.kind === 'system' && /kein Spawn-Signal/.test(l.msg))
     console.log(`\n[test] Chat empfangen: ${chatIn}\n[test] Nachricht gesendet+bestaetigt: ${sentOk} (Server: ${serverGot})\n[test] Befehl gesendet: ${cmdOk}\n[test] Relog nach Kick: ${relog} (Joins ${joins})\n[test] Grund im Chat sichtbar: ${notes}\n[test] Online per Fallback: ${fallback}`)
-    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback && pingOk && reasonOk && upOk ? 0 : 1)
+    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback && pingOk && reasonOk && upOk && sneakOn && sneakRelog && sneakOff && sneakMsg && noLeak ? 0 : 1)
   }, 1500)
 }, 20000)

@@ -41,6 +41,10 @@ function run ({ id, type, adapter }) {
   let offlineSince = Date.now() // seit wann der Bot nicht im Spiel ist
   let alertedDown = false // fuer diesen Ausfall wurde schon gemeldet
   let lastKick = ''
+  // Sneaken (Schleichen): gewuenschter Zustand bleibt ueber Relogs und Neustarts erhalten
+  const sneakFile = path.join(STATE_DIR, id + '.sneak')
+  let sneakWanted = env('BOT_SNEAK', '0') === '1'
+  try { sneakWanted = fs.readFileSync(sneakFile, 'utf8').trim() === '1' } catch (e) { /* Standard aus BOT_SNEAK */ }
   let lastDelaySec = 0
 
   // Sperre: pro Bot darf nur EIN Prozess laufen (sonst zerstoeren sich zwei Anmeldungen gegenseitig)
@@ -90,13 +94,29 @@ function run ({ id, type, adapter }) {
   }
   // Wichtige Ereignisse (Kick, Relog, Online ...) erscheinen auch im Chat-Fenster der App
   const note = m => { if (!loginMode) pushChat({ kind: 'system', from: '', msg: '⚙ ' + m }, true) }
+  function setSneak (on) {
+    sneakWanted = !!on
+    try { fs.writeFileSync(sneakFile, sneakWanted ? '1\n' : '0\n') } catch (e) { /* egal */ }
+    broadcast({ t: 'sneak', on: sneakWanted })
+    note(sneakWanted ? 'Sneaken: AN' : 'Sneaken: AUS')
+    if (client && !dead && state === 'online' && client.setSneak) {
+      try { client.setSneak(sneakWanted) } catch (e) { log('Sneaken fehlgeschlagen:', e.message) }
+    }
+  }
   let lastSay = 0
   function handleLine (sock, line) {
     let m
     try { m = JSON.parse(line) } catch (e) { return }
+    if (m.t === 'sneak') return setSneak(!!m.on)
     if (m.t !== 'say') return
     const text = typeof m.msg === 'string' ? m.msg.replace(/[\r\n]+/g, ' ').trim() : ''
     if (!text || text.length > 256) return send(sock, { t: 'error', msg: 'Nachricht leer oder laenger als 256 Zeichen.' })
+    // Bot-Befehle im Chat:  !sneak   !sneak on|off   !stand  (werden NICHT an den Server geschickt)
+    const bc = /^!(sneak|stand)(?:\s+(on|off|an|aus))?$/i.exec(text)
+    if (bc) {
+      const on = bc[1].toLowerCase() === 'stand' ? false : bc[2] ? /^(on|an)$/i.test(bc[2]) : !sneakWanted
+      return setSneak(on)
+    }
     if (!client || dead || state !== 'online') return send(sock, { t: 'error', msg: 'Bot ist nicht im Spiel.' })
     if (Date.now() - lastSay < 800) return send(sock, { t: 'error', msg: 'Bitte kurz warten (Spam-Schutz).' })
     lastSay = Date.now()
@@ -111,7 +131,7 @@ function run ({ id, type, adapter }) {
     const srv = net.createServer(sock => {
       sock.setEncoding('utf8')
       clients.add(sock)
-      send(sock, { t: 'hello', id, type, state })
+      send(sock, { t: 'hello', id, type, state, sneak: sneakWanted })
       for (const h of history) send(sock, { t: 'chat', ...h, old: true })
       let buf = ''
       sock.on('data', d => {
@@ -198,6 +218,7 @@ function run ({ id, type, adapter }) {
     clearTimeout(joinTimer)
     onlineSince = Date.now()
     setState('online')
+    if (sneakWanted) setTimeout(() => { try { if (client && !dead && state === 'online' && client.setSneak) client.setSneak(true) } catch (e) { log('Sneaken fehlgeschlagen:', e.message) } }, 1500)
     log(`ONLINE – ${why}.`)
     note(`ONLINE – ${why}`)
     if (alertedDown) {

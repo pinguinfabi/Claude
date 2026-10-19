@@ -52,6 +52,15 @@ exports.connect = function connect (ctx) {
 
   return {
     raw: c, // nur fuer Tests
+    setSneak: on => {
+      c.queue('player_action', {
+        runtime_entity_id: BigInt(c.entityId || 0),
+        action: on ? 'start_sneak' : 'stop_sneak',
+        position: { x: 0, y: 0, z: 0 },
+        result_position: { x: 0, y: 0, z: 0 },
+        face: 0
+      })
+    },
     close: () => { try { c.disconnect('Bot beendet') } catch (e) { c.close() } },
     say: text => {
       if (text.startsWith('/')) {

@@ -77,8 +77,18 @@ exports.connect = function connect (ctx) {
   })
   bot.on('end', reason => { ended = true; ctx.closed('Verbindung beendet' + (reason ? `: ${reason}` : '')) })
 
+  // Sneaken: setControlState('sneak') schickt je nach Version entity_action oder player_input.
+  // Nach einem Respawn setzt der Server den Zustand zurueck -> erneut senden.
+  let wantSneak = false
+  bot.on('spawn', () => {
+    if (!wantSneak) return
+    bot.setControlState('sneak', false)
+    bot.setControlState('sneak', true)
+  })
+
   return {
     raw: bot, // nur fuer Tests
+    setSneak: on => { wantSneak = !!on; bot.setControlState('sneak', wantSneak) },
     close: () => { if (!ended) { try { bot.end('Bot beendet') } catch (e) { /* schon zu */ } } },
     say: text => bot.chat(text),
     keepalive: () => bot.swingArm('right')

@@ -893,6 +893,12 @@ internal sealed class ChatForm : Form
     };
     private readonly FlatButton sendButton = new("Senden", primary: true, width: 100) { Margin = new Padding(0, 3, 0, 0) };
     private readonly Label statusLabel = new() { AutoSize = true, ForeColor = Theme.Muted, Text = "Verbinde …" };
+    private readonly CheckBox sneakBox = new()
+    {
+        Text = "Sneaken (Schleichen)", AutoSize = true, ForeColor = Theme.Text, BackColor = Theme.Bg,
+        Cursor = Cursors.Hand, Anchor = AnchorStyles.Right, Margin = new Padding(12, 0, 0, 0)
+    };
+    private bool updatingSneak;
     private readonly int localPort;
     private readonly CancellationTokenSource cts = new();
     private readonly object writeLock = new();
@@ -913,7 +919,13 @@ internal sealed class ChatForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.Controls.Add(statusLabel, 0, 0);
+        var top = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 6) };
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        statusLabel.Anchor = AnchorStyles.Left;
+        top.Controls.Add(statusLabel, 0, 0);
+        top.Controls.Add(sneakBox, 1, 0);
+        root.Controls.Add(top, 0, 0);
         root.Controls.Add(log, 0, 1);
         var bottom = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
         bottom.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -924,6 +936,13 @@ internal sealed class ChatForm : Form
         Controls.Add(root);
 
         sendButton.Click += (_, _) => Send();
+        sneakBox.CheckedChanged += (_, _) =>
+        {
+            if (!updatingSneak)
+            {
+                SendRaw(new { t = "sneak", on = sneakBox.Checked });
+            }
+        };
         input.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
@@ -1000,11 +1019,17 @@ internal sealed class ChatForm : Form
             {
                 case "hello":
                     var helloState = root.GetProperty("state").GetString();
+                    var helloSneak = root.TryGetProperty("sneak", out var hs) && hs.ValueKind == JsonValueKind.True;
                     UiPost(() =>
                     {
                         log.Clear();
                         statusLabel.Text = "● Verbunden – Bot: " + StateText(helloState);
+                        SetSneakBox(helloSneak);
                     });
+                    break;
+                case "sneak":
+                    var sneakOn = root.TryGetProperty("on", out var so) && so.ValueKind == JsonValueKind.True;
+                    UiPost(() => SetSneakBox(sneakOn));
                     break;
                 case "state":
                     var state = root.GetProperty("state").GetString();
@@ -1048,7 +1073,22 @@ internal sealed class ChatForm : Form
         {
             return;
         }
-        byte[] data = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { t = "say", msg = text }) + "\n");
+        if (SendRaw(new { t = "say", msg = text }))
+        {
+            input.Clear();
+        }
+    }
+
+    private void SetSneakBox(bool on)
+    {
+        updatingSneak = true;
+        sneakBox.Checked = on;
+        updatingSneak = false;
+    }
+
+    private bool SendRaw(object payload)
+    {
+        byte[] data = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload) + "\n");
         try
         {
             lock (writeLock)
@@ -1060,11 +1100,12 @@ internal sealed class ChatForm : Form
                 stream.Write(data, 0, data.Length);
                 stream.Flush();
             }
-            input.Clear();
+            return true;
         }
         catch (Exception ex)
         {
             Append("! Senden fehlgeschlagen: " + ex.Message, Theme.Bad);
+            return false;
         }
     }
 
