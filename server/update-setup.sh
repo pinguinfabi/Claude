@@ -971,7 +971,7 @@ exports.connect = function connect (ctx) {
     }
     ctx.closed('Fehler: ' + msg)
   })
-  c.on('close', () => ctx.closed('Verbindung geschlossen'))
+  c.on('close', () => { clearInterval(sneakTimer); ctx.closed('Verbindung geschlossen') })
   c.on('text', p => {
     try {
       let msg = String(p.message || '')
@@ -981,18 +981,94 @@ exports.connect = function connect (ctx) {
     } catch (e) { /* unbekanntes Textpaket */ }
   })
 
+  // --- Sneaken: Eigene Position/Blickrichtung mitfuehren, damit die Eingabedaten zur Serversicht passen ---
+  const SNEAK_MODE = process.env.BOT_BEDROCK_SNEAK || 'both' // action | input | both
+  let pos = { x: 0, y: 0, z: 0 }
+  let pitch = 0
+  let yaw = 0
+  let headYaw = 0
+  let tick = 0n
+  let sneakTimer = null
+  c.on('start_game', p => {
+    try {
+      if (p.player_position) pos = { x: p.player_position.x, y: p.player_position.y, z: p.player_position.z }
+      if (p.rotation) { pitch = p.rotation.x; yaw = p.rotation.z; headYaw = yaw }
+      if (p.current_tick !== undefined) tick = BigInt(p.current_tick)
+    } catch (e) { /* unbekanntes Format */ }
+  })
+  c.on('move_player', p => {
+    try {
+      if (c.entityId !== undefined && String(p.runtime_id) === String(c.entityId)) {
+        pos = { x: p.position.x, y: p.position.y, z: p.position.z }
+        pitch = p.pitch; yaw = p.yaw; headYaw = p.head_yaw
+      }
+    } catch (e) { /* egal */ }
+  })
+  c.on('correct_player_move_prediction', p => {
+    try { if (p.position) pos = { x: p.position.x, y: p.position.y, z: p.position.z } } catch (e) { /* egal */ }
+  })
+  // Ab Bedrock 1.26.40 sind die Eingabedaten eine Liste von Namen, davor eine Flaggen-Sammlung
+  const verAtLeast = (v, w) => {
+    const a = String(v).split('.').map(Number)
+    const b = w.split('.').map(Number)
+    for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0)
+    return true
+  }
+  function authInput (flags) {
+    const rad = Math.PI / 180
+    tick += 1n
+    const inputData = verAtLeast(c.options.version, '1.26.40') ? Object.keys(flags).filter(k => flags[k]) : flags
+    c.queue('player_auth_input', {
+      pitch,
+      yaw,
+      position: pos,
+      move_vector: { x: 0, z: 0 },
+      head_yaw: headYaw,
+      input_data: inputData,
+      input_mode: 'mouse',
+      play_mode: 'normal',
+      interaction_model: 'classic',
+      interact_rotation: { x: pitch, z: yaw },
+      tick,
+      delta: { x: 0, y: 0, z: 0 },
+      analogue_move_vector: { x: 0, z: 0 },
+      camera_orientation: {
+        x: -Math.sin(yaw * rad) * Math.cos(pitch * rad),
+        y: -Math.sin(pitch * rad),
+        z: Math.cos(yaw * rad) * Math.cos(pitch * rad)
+      },
+      raw_move_vector: { x: 0, z: 0 }
+    })
+  }
+
   return {
     raw: c, // nur fuer Tests
     setSneak: on => {
-      c.queue('player_action', {
-        runtime_entity_id: BigInt(c.entityId || 0),
-        action: on ? 'start_sneak' : 'stop_sneak',
-        position: { x: 0, y: 0, z: 0 },
-        result_position: { x: 0, y: 0, z: 0 },
-        face: 0
-      })
+      if (SNEAK_MODE !== 'input') {
+        // alter Weg (Server ohne eigene Bewegungspruefung): einzelner Aktionsbefehl
+        c.queue('player_action', {
+          runtime_entity_id: BigInt(c.entityId || 0),
+          action: on ? 'start_sneak' : 'stop_sneak',
+          position: { x: 0, y: 0, z: 0 },
+          result_position: { x: 0, y: 0, z: 0 },
+          face: 0
+        })
+      }
+      if (SNEAK_MODE === 'action') return
+      // Server mit eigener Bewegungspruefung (z. B. Geyser) liest das Schleichen aus den Eingabedaten,
+      // die ein echter Client 20x pro Sekunde schickt -> waehrend des Schleichens genauso senden.
+      clearInterval(sneakTimer)
+      sneakTimer = null
+      if (on) {
+        authInput({ start_sneaking: true, sneak_pressed_raw: true, sneaking: true, sneak_down: true, sneak_current_raw: true })
+        sneakTimer = setInterval(() => {
+          try { authInput({ sneaking: true, sneak_down: true, sneak_current_raw: true }) } catch (e) { /* Verbindung weg */ }
+        }, 50)
+      } else {
+        authInput({ stop_sneaking: true, sneak_released_raw: true })
+      }
     },
-    close: () => { try { c.disconnect('Bot beendet') } catch (e) { c.close() } },
+    close: () => { clearInterval(sneakTimer); try { c.disconnect('Bot beendet') } catch (e) { c.close() } },
     say: text => {
       if (text.startsWith('/')) {
         c.queue('command_request', {
