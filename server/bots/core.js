@@ -178,6 +178,7 @@ function run ({ id, type, adapter }) {
       onMsaCode,
       // Verbindungsdiagnose: wo haengt der Aufbau? (Journal immer, Chat nur in den ersten Versuchen)
       diag: m => { lastDiag = m; log('  .', m); if (attempt < 3) note(m) },
+      note: m => { log('  .', m); note(m) }, // Rueckmeldung, die immer im Chat-Fenster erscheint
       authenticated: () => {
         if (!loginMode || loginDone) return
         loginDone = true

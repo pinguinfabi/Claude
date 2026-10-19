@@ -29,7 +29,7 @@ server.on('login', client => {
   client.write('position', { x: 0, y: 64, z: 0, yaw: 0, pitch: 0, flags: 0, teleportId: 0 })
   if (joins > 1) client.write('update_health', { health: 20, food: 20, foodSaturation: 5 }) // 1. Join: kein Spawn-Signal -> Fallback
   setTimeout(() => client.write('chat', { message: JSON.stringify({ text: '<Steve> hallo bot' }), position: 0 }), 2500)
-  client.on('entity_action', p => { entityActions.push({ joins, id: p.actionId }); console.log('[test] Server: entity_action', p.actionId, '(Join', joins + ')') })
+  client.on('entity_action', p => { entityActions.push({ joins, id: p.actionId }); if (joins >= 2) client.write('entity_metadata', { entityId: client.id, metadata: [{ key: 0, type: 0, value: (p.actionId === 0 || p.actionId === 'start_sneaking') ? 2 : 0 }] }); console.log('[test] Server: entity_action', p.actionId, '(Join', joins + ')') })
   client.on('chat', p => { chatsToServer.push(p.message); serverGot = p.message; console.log('[test] Server erhielt Chat:', p.message) })
   if (joins === 1) setTimeout(() => client.end('Test-Kick (AFK)'), 9000)
 })
@@ -37,7 +37,7 @@ server.on('login', client => {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jbot-'))
 const bot = spawn('node', [path.join(__dirname, '..', 'bot.js'), 'j9'], {
   env: { ...process.env, BOT_HOST: '127.0.0.1', BOT_PORT: String(PORT), BOT_OFFLINE: '1', BOT_DIR: dir, BOT_VERSION: VERSION,
-    BOT_CONTROL_PORT: String(CONTROL), BOT_FALLBACK_MS: '2000', BOT_DISCORD_WEBHOOK: 'http://127.0.0.1:19801/api/webhooks/1/test', BOT_DISCORD_ROLE: '1546930399786041404', BOT_LABEL: 'Farmer', BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
+    BOT_CONTROL_PORT: String(CONTROL), BOT_FALLBACK_MS: '2000', BOT_DISCORD_WEBHOOK: 'http://127.0.0.1:19801/api/webhooks/1/test', BOT_DISCORD_ROLE: '1546930399786041404', BOT_LABEL: 'Farmer', BOT_SNEAK_CONFIRM_MS: '700', BOT_BACKOFF_BASE_MS: '1000', BOT_BACKOFF_MAX_MS: '3000' },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 bot.stdout.on('data', d => process.stdout.write('[bot] ' + d))
@@ -72,6 +72,9 @@ setTimeout(() => {
     const sneakRelog = entityActions.some(a => a.joins === 2 && (a.id === 0 || a.id === 'start_sneaking'))
     const sneakOff = entityActions.some(a => a.joins === 2 && (a.id === 1 || a.id === 'stop_sneaking'))
     const sneakMsg = lines.some(l => l.t === 'sneak' && l.on === true)
+    const unconfirmed = lines.some(l => l.t === 'chat' && l.kind === 'system' && /NICHT bestätigt/.test(l.msg))
+    const confirmed = lines.some(l => l.t === 'chat' && l.kind === 'system' && /Server bestätigt: Der Bot schleicht/.test(l.msg))
+    console.log(`[test] Rueckmeldung: nicht bestaetigt gemeldet: ${unconfirmed}, bestaetigt gemeldet: ${confirmed}`)
     const noLeak = !chatsToServer.some(m => String(m).startsWith('!'))
     console.log(`[test] Sneaken an: ${sneakOn}, bleibt nach Relog: ${sneakRelog}, aus per !sneak off: ${sneakOff}, App informiert: ${sneakMsg}, Befehl nicht an Server: ${noLeak}`)
     const down = hooks.find(h => /getrennt/.test(h.content))
@@ -83,6 +86,6 @@ setTimeout(() => {
     const notes = lines.some(l => l.t === 'chat' && l.kind === 'system' && /Getrennt|Neuer Versuch/.test(l.msg))
     const fallback = lines.some(l => l.t === 'chat' && l.kind === 'system' && /kein Spawn-Signal/.test(l.msg))
     console.log(`\n[test] Chat empfangen: ${chatIn}\n[test] Nachricht gesendet+bestaetigt: ${sentOk} (Server: ${serverGot})\n[test] Befehl gesendet: ${cmdOk}\n[test] Relog nach Kick: ${relog} (Joins ${joins})\n[test] Grund im Chat sichtbar: ${notes}\n[test] Online per Fallback: ${fallback}`)
-    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback && pingOk && reasonOk && upOk && sneakOn && sneakRelog && sneakOff && sneakMsg && noLeak ? 0 : 1)
+    process.exit(chatIn && sentOk && cmdOk && relog && notes && fallback && pingOk && reasonOk && upOk && sneakOn && sneakRelog && sneakOff && sneakMsg && noLeak && unconfirmed && confirmed ? 0 : 1)
   }, 1500)
 }, 20000)

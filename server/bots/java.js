@@ -80,15 +80,31 @@ exports.connect = function connect (ctx) {
   // Sneaken: setControlState('sneak') schickt je nach Version entity_action oder player_input.
   // Nach einem Respawn setzt der Server den Zustand zurueck -> erneut senden.
   let wantSneak = false
+  let sneakTimer = null
+  const CONFIRM_MS = parseInt(process.env.BOT_SNEAK_CONFIRM_MS || '2500', 10)
+  // Der Server meldet dem Bot seinen eigenen Zustand zurueck (entity.crouching). So sieht man, ob das Schleichen ankam.
+  function confirmSneak (attempt = 0) {
+    clearTimeout(sneakTimer)
+    if (!wantSneak) return
+    sneakTimer = setTimeout(() => {
+      if (!wantSneak || ended) return
+      if (bot.entity && bot.entity.crouching) return ctx.note && ctx.note('Server bestätigt: Der Bot schleicht.')
+      if (attempt >= 2) return ctx.note && ctx.note('Server hat das Schleichen NICHT bestätigt – der Bot schleicht vermutlich nicht.')
+      bot.setControlState('sneak', false) // erneut senden
+      bot.setControlState('sneak', true)
+      confirmSneak(attempt + 1)
+    }, CONFIRM_MS)
+  }
   bot.on('spawn', () => {
     if (!wantSneak) return
     bot.setControlState('sneak', false)
     bot.setControlState('sneak', true)
+    confirmSneak()
   })
 
   return {
     raw: bot, // nur fuer Tests
-    setSneak: on => { wantSneak = !!on; bot.setControlState('sneak', wantSneak) },
+    setSneak: on => { wantSneak = !!on; bot.setControlState('sneak', wantSneak); confirmSneak() },
     close: () => { if (!ended) { try { bot.end('Bot beendet') } catch (e) { /* schon zu */ } } },
     say: text => bot.chat(text),
     keepalive: () => bot.swingArm('right')
